@@ -59,6 +59,11 @@ final class OrderbookViewModel {
     /// Minimum interval between UI applies; bursts of frames are coalesced
     /// down to the latest snapshot.
     private static let applyInterval: Duration = .milliseconds(100)
+    /// The spread updates at most this often. The bbo stream reports every
+    /// top-of-book change, including tens-of-milliseconds transients while
+    /// makers re-quote; sampling more calmly, like Hyperliquid's own widget,
+    /// keeps the row from strobing through 1-2-4-9 during fast markets.
+    private static let summaryInterval: Duration = .milliseconds(500)
     /// Decimals shown for coin-denominated sizes and totals.
     private static let coinSizeDecimals = 5
     /// A level also flashes when its resting size moves by at least this
@@ -165,6 +170,7 @@ final class OrderbookViewModel {
     /// Levels from the latest l2Book snapshot.
     private var askLevels: [L2Level] = []
     private var bidLevels: [L2Level] = []
+    private var lastBbo: BboData?
     private var previousMark: Double?
 
     /// Prices visible in the previous render, per side, so a level that is
@@ -180,6 +186,8 @@ final class OrderbookViewModel {
     private var pendingBook: L2Book?
     private var applyScheduled = false
     private var lastApply: ContinuousClock.Instant?
+    private var summaryScheduled = false
+    private var lastSummaryUpdate: ContinuousClock.Instant?
 
     private let priceFormatter: NumberFormatter
     private let sizeFormatter: NumberFormatter
@@ -196,6 +204,10 @@ final class OrderbookViewModel {
         socket.onBook = { [weak self] book in
             self?.pendingBook = book
             self?.scheduleApply()
+        }
+        socket.onBbo = { [weak self] bbo in
+            self?.lastBbo = bbo
+            self?.scheduleSummary()
         }
         socket.onContext = { [weak self] ctx in
             self?.apply(ctx)
@@ -241,11 +253,12 @@ final class OrderbookViewModel {
         for index in bids.indices { clear(&bids[index]) }
     }
 
-    /// Only the coin invalidates the header; re-grouping keeps it live.
+    /// Only the coin invalidates the header and bbo; re-grouping keeps them.
     private func resetContext() {
         previousMark = nil
         priceText = "—"
         priceDirection = .flat
+        lastBbo = nil
     }
 
     private func clear(_ row: inout Row) {
@@ -368,20 +381,54 @@ final class OrderbookViewModel {
         }
     }
 
+    private func scheduleSummary() {
+        guard !summaryScheduled else { return }
+        let now = ContinuousClock.now
+        if let lastSummaryUpdate, now - lastSummaryUpdate < Self.summaryInterval {
+            summaryScheduled = true
+            let wait = Self.summaryInterval - (now - lastSummaryUpdate)
+            Task { [weak self] in
+                try? await Task.sleep(for: wait)
+                guard let self else { return }
+                self.summaryScheduled = false
+                self.lastSummaryUpdate = .now
+                self.updateSummary()
+            }
+        } else {
+            lastSummaryUpdate = now
+            updateSummary()
+        }
+    }
+
+    /// Best bid/ask from a single source: the full-precision bbo stream when
+    /// it has both sides, else the bucketed book. Mixing a full-precision
+    /// side with a bucket-rounded one would fabricate spreads anywhere
+    /// between one tick and the bucket width.
+    private var bestPair: (bid: String, ask: String)? {
+        if let bbo = lastBbo, let bid = bbo.bestBid?.px, let ask = bbo.bestAsk?.px {
+            return (bid, ask)
+        }
+        guard let bid = bidLevels.first?.px, let ask = askLevels.first?.px else { return nil }
+        return (bid, ask)
+    }
+
+    /// The spread row shows the true market spread from the full-precision
+    /// bbo stream, matching Hyperliquid: grouping is a display convenience
+    /// and shouldn't inflate the apparent cost of crossing the book.
     private func updateSummary() {
-        guard let bidRaw = bidLevels.first?.px, let askRaw = askLevels.first?.px,
+        guard let (bidRaw, askRaw) = bestPair,
               let bid = Double(bidRaw), let ask = Double(askRaw) else { return }
 
         let spread = ask - bid
         let mid = (bid + ask) / 2
-        spreadText = format(spread, decimals: tickDecimals)
+        spreadText = trimmed(spread, decimals: max(decimals(in: bidRaw), decimals(in: askRaw)))
         let pct = mid > 0 ? spread / mid * 100 : 0
         spreadPercentText = String(format: "%.3f%%", pct)
     }
 
     private var currentMid: Double? {
-        guard let bidRaw = bidLevels.first?.px, let bestBid = Double(bidRaw),
-              let askRaw = askLevels.first?.px, let bestAsk = Double(askRaw) else { return nil }
+        guard let (bidRaw, askRaw) = bestPair,
+              let bestBid = Double(bidRaw), let bestAsk = Double(askRaw) else { return nil }
         return (bestBid + bestAsk) / 2
     }
 

@@ -28,6 +28,22 @@ struct L2BookMessage: Decodable {
     let data: L2Book
 }
 
+/// Payload of a `bbo` frame: the current best bid and ask at full precision,
+/// pushed whenever either changes. Feeds the spread display, which shows the
+/// true market spread no matter how coarsely the book is grouped.
+struct BboData: Decodable {
+    let coin: String
+    let time: UInt64
+    let bbo: [L2Level?]
+
+    var bestBid: L2Level? { bbo.indices.contains(0) ? bbo[0] : nil }
+    var bestAsk: L2Level? { bbo.indices.contains(1) ? bbo[1] : nil }
+}
+
+struct BboMessage: Decodable {
+    let data: BboData
+}
+
 /// Exchange-computed context for one asset. Unlike the book, these prices are
 /// unaffected by the display grouping we request.
 struct AssetContext: Decodable {

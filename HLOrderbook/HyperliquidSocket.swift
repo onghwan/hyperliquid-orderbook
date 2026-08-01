@@ -14,6 +14,7 @@ final class HyperliquidSocket {
     }
 
     var onBook: (L2Book) -> Void = { _ in }
+    var onBbo: (BboData) -> Void = { _ in }
     var onContext: (AssetContext) -> Void = { _ in }
 
     private let url = URL(string: "wss://api.hyperliquid.xyz/ws")!
@@ -46,11 +47,13 @@ final class HyperliquidSocket {
             send("unsubscribe", payload: l2BookPayload(old))
             if old.coin != new.coin {
                 send("unsubscribe", payload: contextPayload(coin: old.coin))
+                send("unsubscribe", payload: bboPayload(coin: old.coin))
             }
         }
         send("subscribe", payload: l2BookPayload(new))
         if old?.coin != new.coin {
             send("subscribe", payload: contextPayload(coin: new.coin))
+            send("subscribe", payload: bboPayload(coin: new.coin))
         }
     }
 
@@ -80,6 +83,7 @@ final class HyperliquidSocket {
         if let subscription {
             send("subscribe", payload: l2BookPayload(subscription))
             send("subscribe", payload: contextPayload(coin: subscription.coin))
+            send("subscribe", payload: bboPayload(coin: subscription.coin))
         }
         startReceiving(on: task)
         startPinging()
@@ -139,6 +143,11 @@ final class HyperliquidSocket {
             if book.coin == subscription?.coin {
                 onBook(book)
             }
+        case "bbo":
+            guard let bbo = try? decoder.decode(BboMessage.self, from: data).data else { return }
+            if bbo.coin == subscription?.coin {
+                onBbo(bbo)
+            }
         case "activeAssetCtx":
             guard let ctx = try? decoder.decode(AssetContextMessage.self, from: data).data else { return }
             if ctx.coin == subscription?.coin {
@@ -174,6 +183,10 @@ final class HyperliquidSocket {
 
     private func contextPayload(coin: String) -> [String: Any] {
         ["type": "activeAssetCtx", "coin": coin]
+    }
+
+    private func bboPayload(coin: String) -> [String: Any] {
+        ["type": "bbo", "coin": coin]
     }
 
     private func send(_ method: String, payload: [String: Any]) {

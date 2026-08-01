@@ -28,7 +28,10 @@ connects straight to `wss://api.hyperliquid.xyz/ws`.
   significant figures, labelled by the spread each one produces. Steps are
   derived from the current price magnitude and mapped back to the `nSigFigs`
   (and `mantissa`, for the 2× and 5× steps) the feed expects, applied by
-  re-subscribing.
+  re-subscribing. The spread row itself always shows the true market spread
+  from the full-precision `bbo` stream, matching Hyperliquid — grouping is a
+  display convenience and shouldn't inflate the apparent cost of crossing
+  the book.
 - **Size units** — a toolbar toggle shows sizes and totals either in the coin
   (BTC/ETH) or in USDC notional; switching re-renders the stored snapshot
   without touching the subscription.
@@ -57,9 +60,9 @@ connects straight to `wss://api.hyperliquid.xyz/ws`.
 ## Architecture
 
 ```
-HyperliquidSocket   websocket lifecycle: subscribe/unsubscribe (l2Book +
-                    activeAssetCtx per coin), pings, reconnection with
-                    backoff. Emits decoded frames.
+HyperliquidSocket   websocket lifecycle: subscribe/unsubscribe (l2Book,
+                    activeAssetCtx, and bbo per coin), pings, reconnection
+                    with backoff. Emits decoded frames.
 OrderbookViewModel  turns snapshots into fixed-identity row slots, coalesces
                     bursts to ≤10 UI applies/sec, pre-formats all strings.
 OrderbookView       the book: scroll view anchored on the spread, depth bars.
