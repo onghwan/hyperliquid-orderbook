@@ -14,6 +14,7 @@ final class HyperliquidSocket {
     }
 
     var onBook: (L2Book) -> Void = { _ in }
+    var onContext: (AssetContext) -> Void = { _ in }
 
     private let url = URL(string: "wss://api.hyperliquid.xyz/ws")!
     private let session = URLSession(configuration: .default)
@@ -33,8 +34,9 @@ final class HyperliquidSocket {
         open()
     }
 
-    /// Switches coin/precision on the live socket instead of tearing the
-    /// connection down. Frames for the old stream are filtered by the caller.
+    /// Switches coin/grouping on the live socket instead of tearing the
+    /// connection down. The context stream only depends on the coin, so it is
+    /// left alone when just the grouping changes.
     func update(subscription new: Subscription) {
         guard new != subscription else { return }
         let old = subscription
@@ -42,8 +44,14 @@ final class HyperliquidSocket {
         guard socket != nil else { return }
         if let old {
             send("unsubscribe", payload: l2BookPayload(old))
+            if old.coin != new.coin {
+                send("unsubscribe", payload: contextPayload(coin: old.coin))
+            }
         }
         send("subscribe", payload: l2BookPayload(new))
+        if old?.coin != new.coin {
+            send("subscribe", payload: contextPayload(coin: new.coin))
+        }
     }
 
     /// Tears the connection down while the app is in the background.
@@ -71,6 +79,7 @@ final class HyperliquidSocket {
         task.resume()
         if let subscription {
             send("subscribe", payload: l2BookPayload(subscription))
+            send("subscribe", payload: contextPayload(coin: subscription.coin))
         }
         startReceiving(on: task)
         startPinging()
@@ -130,6 +139,11 @@ final class HyperliquidSocket {
             if book.coin == subscription?.coin {
                 onBook(book)
             }
+        case "activeAssetCtx":
+            guard let ctx = try? decoder.decode(AssetContextMessage.self, from: data).data else { return }
+            if ctx.coin == subscription?.coin {
+                onContext(ctx)
+            }
         default:
             break
         }
@@ -156,6 +170,10 @@ final class HyperliquidSocket {
             payload["mantissa"] = mantissa
         }
         return payload
+    }
+
+    private func contextPayload(coin: String) -> [String: Any] {
+        ["type": "activeAssetCtx", "coin": coin]
     }
 
     private func send(_ method: String, payload: [String: Any]) {

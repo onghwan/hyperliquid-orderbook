@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct ContentView: View {
+    private static let priceFontSize: CGFloat = 28
+
     @State private var model = OrderbookViewModel()
     @State private var showsMarketPicker = false
     @State private var toast: String?
@@ -47,19 +49,12 @@ struct ContentView: View {
                         .resizable()
                         .frame(width: 26, height: 26)
                         .clipShape(Circle())
-                    VStack(alignment: .leading, spacing: 0) {
-                        HStack(spacing: 4) {
-                            Text(model.coin.rawValue)
-                                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.primary)
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(.secondary)
-                        }
-                        Text("USDC")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text(model.coin.rawValue)
+                        .font(.system(size: 19, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.secondary)
                 }
                 .contentShape(Rectangle())
             }
@@ -67,26 +62,39 @@ struct ContentView: View {
 
             Spacer()
 
-            HStack(spacing: 6) {
-                if model.midDirection != .flat {
-                    Image(systemName: model.midDirection == .up ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+            // One flat baseline-aligned row: nesting the arrow and price in
+            // their own HStack would hand the outer row a centre-aligned
+            // baseline that shifts whenever the arrow appears.
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if model.priceDirection != .flat {
+                    Image(systemName: model.priceDirection == .up ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
                         .font(.system(size: 13))
+                        .foregroundStyle(color(for: model.priceDirection))
+                        // Centre the arrow on the digits instead of sitting it
+                        // on their baseline: the price's cap-height centre is
+                        // roughly 35% of its font size above it.
+                        .alignmentGuide(.firstTextBaseline) {
+                            $0[VerticalAlignment.center] + Self.priceFontSize * 0.35
+                        }
                 }
-                Text(model.midText)
-                    .font(.system(size: 28, weight: .semibold, design: .rounded))
+                Text(model.priceText)
+                    .font(.system(size: Self.priceFontSize, weight: .semibold, design: .rounded))
                     .monospacedDigit()
+                    .foregroundStyle(color(for: model.priceDirection))
                     .contentTransition(.numericText())
-                    .animation(.snappy(duration: 0.25), value: model.midText)
+                    .animation(.snappy(duration: 0.25), value: model.priceText)
+                Text("USDC")
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
             }
-            .foregroundStyle(midColor)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(RoundedRectangle(cornerRadius: 12).fill(Theme.card))
     }
 
-    private var midColor: Color {
-        switch model.midDirection {
+    private func color(for direction: OrderbookViewModel.Direction) -> Color {
+        switch direction {
         case .up: Theme.bid
         case .down: Theme.ask
         case .flat: .primary
@@ -203,9 +211,6 @@ struct MarketPickerSheet: View {
                         Text(coin.rawValue)
                             .font(.headline)
                             .foregroundStyle(.primary)
-                        Text("/ USDC")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
                         Spacer()
                         if coin == model.coin {
                             Image(systemName: "checkmark")
@@ -213,11 +218,16 @@ struct MarketPickerSheet: View {
                                 .foregroundStyle(Theme.bid)
                         }
                     }
+                    // Without this the spacer between the name and the
+                    // checkmark isn't part of the hit area.
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .listRowBackground(Theme.card)
             }
             .scrollContentBackground(.hidden)
+            .listSectionSpacing(.compact)
+            .contentMargins(.top, 8, for: .scrollContent)
             .background(Theme.background)
             .navigationTitle("Markets")
             .navigationBarTitleDisplayMode(.inline)

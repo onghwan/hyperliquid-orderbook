@@ -32,9 +32,11 @@ connects straight to `wss://api.hyperliquid.xyz/ws`.
 - **Size units** — a toolbar toggle shows sizes and totals either in the coin
   (BTC/ETH) or in USDC notional; switching re-renders the stored snapshot
   without touching the subscription.
-- **Change feedback** — cumulative depth bars animate as liquidity moves; the
-  header's mid price ticks with a numeric text transition and colors by
-  direction.
+- **Header price** — the mark price comes from the `activeAssetCtx` channel,
+  so it stays exact regardless of how coarsely the book is grouped (a mid
+  derived from $1,000 buckets would be off by hundreds). It ticks with a
+  numeric text transition and colors by direction.
+- **Change feedback** — cumulative depth bars animate as liquidity moves.
 - **Haptics** — selection feedback when changing symbol, grouping, or units;
   a light impact when tapping a row to copy its price.
 - **Resilience** — keep-alive pings every 45 s, automatic reconnection with
@@ -44,8 +46,9 @@ connects straight to `wss://api.hyperliquid.xyz/ws`.
 ## Architecture
 
 ```
-HyperliquidSocket   websocket lifecycle: subscribe/unsubscribe, pings,
-                    reconnection with backoff. Emits decoded L2Book frames.
+HyperliquidSocket   websocket lifecycle: subscribe/unsubscribe (l2Book +
+                    activeAssetCtx per coin), pings, reconnection with
+                    backoff. Emits decoded frames.
 OrderbookViewModel  turns snapshots into fixed-identity row slots, coalesces
                     bursts to ≤10 UI applies/sec, pre-formats all strings.
 OrderbookView       the book: scroll view anchored on the spread, depth bars.

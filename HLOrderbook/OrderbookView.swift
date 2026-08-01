@@ -53,7 +53,7 @@ struct OrderbookView: View {
 
     private var columnHeader: some View {
         HStack(spacing: 8) {
-            Text("Price (USD)")
+            Text("Price (USDC)")
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text("Size (\(model.unitLabel))")
                 .frame(maxWidth: .infinity, alignment: .trailing)

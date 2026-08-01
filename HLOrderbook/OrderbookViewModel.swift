@@ -54,8 +54,10 @@ final class OrderbookViewModel {
 
     private(set) var asks: [Row]    // asks[0] is the best ask
     private(set) var bids: [Row]    // bids[0] is the best bid
-    private(set) var midText = "—"
-    private(set) var midDirection: Direction = .flat
+    /// Mark price from `activeAssetCtx` — the exchange's own price, so it
+    /// stays exact no matter how coarsely the book is grouped.
+    private(set) var priceText = "—"
+    private(set) var priceDirection: Direction = .flat
     private(set) var spreadText = "—"
     private(set) var spreadPercentText = "—"
     private(set) var hasBook = false
@@ -64,6 +66,7 @@ final class OrderbookViewModel {
         didSet {
             guard coin != oldValue else { return }
             Haptics.selection()
+            resetContext()
             resubscribe()
         }
     }
@@ -108,6 +111,17 @@ final class OrderbookViewModel {
         groupingOptions.first { $0.grouping == grouping }?.label ?? "—"
     }
 
+    /// Decimals the selected tick needs, so a $0.1 book shows "1,869.0"
+    /// while a $1 book shows "63,083".
+    private var tickDecimals: Int {
+        guard let px = bidLevels.first?.px ?? askLevels.first?.px,
+              let price = Double(px), price > 0 else { return 0 }
+        let digits = Int(floor(log10(price))) + 1
+        var step = pow(10.0, Double(digits - (grouping.nSigFigs ?? 5)))
+        step *= Double(grouping.mantissa ?? 1)
+        return max(0, Int(ceil(-log10(step))))
+    }
+
     /// Price grouping requested from the feed.
     var grouping: Grouping = .finest {
         didSet {
@@ -137,7 +151,7 @@ final class OrderbookViewModel {
     /// Levels from the latest l2Book snapshot.
     private var askLevels: [L2Level] = []
     private var bidLevels: [L2Level] = []
-    private var previousMid: Double?
+    private var previousMark: Double?
 
     private var pendingBook: L2Book?
     private var applyScheduled = false
@@ -158,6 +172,9 @@ final class OrderbookViewModel {
         socket.onBook = { [weak self] book in
             self?.pendingBook = book
             self?.scheduleApply()
+        }
+        socket.onContext = { [weak self] ctx in
+            self?.apply(ctx)
         }
     }
 
@@ -188,14 +205,18 @@ final class OrderbookViewModel {
         hasBook = false
         askLevels = []
         bidLevels = []
-        previousMid = nil
         pendingBook = nil
-        midText = "—"
-        midDirection = .flat
         spreadText = "—"
         spreadPercentText = "—"
         for index in asks.indices { clear(&asks[index]) }
         for index in bids.indices { clear(&bids[index]) }
+    }
+
+    /// Only the coin invalidates the header; re-grouping keeps it live.
+    private func resetContext() {
+        previousMark = nil
+        priceText = "—"
+        priceDirection = .flat
     }
 
     private func clear(_ row: inout Row) {
@@ -244,8 +265,9 @@ final class OrderbookViewModel {
         let asksParsed = parse(askLevels)
         let bidsParsed = parse(bidLevels)
         let maxTotal = max(asksParsed.last?.total ?? 0, bidsParsed.last?.total ?? 0, .leastNonzeroMagnitude)
-        populate(rows: &asks, from: asksParsed, maxTotal: maxTotal)
-        populate(rows: &bids, from: bidsParsed, maxTotal: maxTotal)
+        let decimals = tickDecimals
+        populate(rows: &asks, from: asksParsed, maxTotal: maxTotal, decimals: decimals)
+        populate(rows: &bids, from: bidsParsed, maxTotal: maxTotal, decimals: decimals)
         hasBook = true
     }
 
@@ -267,7 +289,7 @@ final class OrderbookViewModel {
         }
     }
 
-    private func populate(rows: inout [Row], from levels: [ParsedLevel], maxTotal: Double) {
+    private func populate(rows: inout [Row], from levels: [ParsedLevel], maxTotal: Double, decimals: Int) {
         for index in rows.indices {
             guard index < levels.count else {
                 clear(&rows[index])
@@ -275,7 +297,7 @@ final class OrderbookViewModel {
             }
             let level = levels[index]
             rows[index].rawPrice = level.px
-            rows[index].priceText = formatPrice(level.px)
+            rows[index].priceText = formatPrice(level.px, decimals: decimals)
             rows[index].sizeText = formatSize(level.size)
             rows[index].totalText = formatSize(level.total)
             rows[index].depth = CGFloat(level.total / maxTotal)
@@ -287,36 +309,49 @@ final class OrderbookViewModel {
         guard let bidRaw = bidLevels.first?.px, let askRaw = askLevels.first?.px,
               let bid = Double(bidRaw), let ask = Double(askRaw) else { return }
 
-        let mid = (bid + ask) / 2
         let spread = ask - bid
-
-        if let previousMid, mid != previousMid {
-            midDirection = mid > previousMid ? .up : .down
-        }
-        previousMid = mid
-
-        let baseDecimals = max(decimals(in: bidRaw), decimals(in: askRaw))
-        midText = format(mid, decimals: decimalsNeeded(for: mid, atLeast: baseDecimals))
-        spreadText = format(spread, decimals: decimalsNeeded(for: spread, atLeast: baseDecimals))
+        let mid = (bid + ask) / 2
+        spreadText = format(spread, decimals: tickDecimals)
         let pct = mid > 0 ? spread / mid * 100 : 0
         spreadPercentText = String(format: "%.3f%%", pct)
     }
 
-    // MARK: - Formatting
+    private func apply(_ context: AssetContext) {
+        guard let mark = Double(context.ctx.markPx) else { return }
 
-    /// Formats a price string from the feed, preserving exactly the precision
-    /// the server sent for the selected nSigFigs.
-    private func formatPrice(_ raw: String) -> String {
-        guard let value = Double(raw) else { return raw }
-        return format(value, decimals: decimals(in: raw))
+        if let previousMark, mark != previousMark {
+            priceDirection = mark > previousMark ? .up : .down
+        }
+        previousMark = mark
+        priceText = trimmed(mark, decimals: decimals(in: context.ctx.markPx))
     }
 
-    /// Prices and spreads drop trailing zeros, so a level at a whole dollar
-    /// reads as "63,083" rather than "63,083.0".
+    // MARK: - Formatting
+
+    /// Formats a price from the feed at the selected tick's precision, so
+    /// every row lines up on the decimal point.
+    private func formatPrice(_ raw: String, decimals: Int) -> String {
+        guard let value = Double(raw) else { return raw }
+        return format(value, decimals: decimals)
+    }
+
     private func format(_ value: Double, decimals: Int) -> String {
+        priceFormatter.minimumFractionDigits = decimals
+        priceFormatter.maximumFractionDigits = decimals
+        return priceFormatter.string(from: value as NSNumber) ?? String(value)
+    }
+
+    /// Header prices aren't tied to the book's tick, so they drop trailing
+    /// zeros: a mark of "63067.0" reads as "63,067".
+    private func trimmed(_ value: Double, decimals: Int) -> String {
         priceFormatter.minimumFractionDigits = 0
         priceFormatter.maximumFractionDigits = decimals
         return priceFormatter.string(from: value as NSNumber) ?? String(value)
+    }
+
+    private func decimals(in raw: String) -> Int {
+        guard let dot = raw.firstIndex(of: ".") else { return 0 }
+        return raw.distance(from: raw.index(after: dot), to: raw.endIndex)
     }
 
     private func formatTick(_ step: Double) -> String {
@@ -331,15 +366,4 @@ final class OrderbookViewModel {
         return sizeFormatter.string(from: value as NSNumber) ?? String(value)
     }
 
-    private func decimals(in raw: String) -> Int {
-        guard let dotIndex = raw.firstIndex(of: ".") else { return 0 }
-        return raw.distance(from: raw.index(after: dotIndex), to: raw.endIndex)
-    }
-
-    /// Mid/spread can need one more decimal than the feed's tick (e.g. a mid
-    /// of 62998.5 between 62998 and 62999).
-    private func decimalsNeeded(for value: Double, atLeast base: Int) -> Int {
-        let scaled = value * pow(10, Double(base))
-        return abs(scaled.rounded() - scaled) < 1e-6 ? base : base + 1
-    }
 }

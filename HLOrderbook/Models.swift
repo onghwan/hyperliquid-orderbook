@@ -27,3 +27,18 @@ struct ChannelPeek: Decodable {
 struct L2BookMessage: Decodable {
     let data: L2Book
 }
+
+/// Exchange-computed context for one asset. Unlike the book, these prices are
+/// unaffected by the display grouping we request.
+struct AssetContext: Decodable {
+    struct Values: Decodable {
+        let markPx: String
+    }
+
+    let coin: String
+    let ctx: Values
+}
+
+struct AssetContextMessage: Decodable {
+    let data: AssetContext
+}
