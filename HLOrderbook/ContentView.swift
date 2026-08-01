@@ -9,8 +9,6 @@ struct ContentView: View {
 
     @State private var model = OrderbookViewModel()
     @State private var showsMarketPicker = false
-    @State private var toast: String?
-    @State private var toastTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -18,13 +16,12 @@ struct ContentView: View {
         VStack(spacing: 14) {
             header
                 .padding(.horizontal, 16)
-            OrderbookView(model: model, onCopyPrice: copy(price:))
+            OrderbookView(model: model)
                 .padding(.horizontal, 12)
             toolbar
         }
         .padding(.top, 8)
         .background(Theme.background.ignoresSafeArea())
-        .overlay(alignment: .bottom) { toastView }
         .sheet(isPresented: $showsMarketPicker) {
             MarketPickerSheet(model: model)
                 .presentationDetents([.medium, .large])
@@ -197,33 +194,6 @@ struct ContentView: View {
         .tint(.primary)
     }
 
-    // MARK: - Copy toast
-
-    private func copy(price: String) {
-        UIPasteboard.general.string = price
-        Haptics.lightTap()
-        toastTask?.cancel()
-        withAnimation(.snappy) { toast = "Copied \(price)" }
-        toastTask = Task {
-            try? await Task.sleep(for: .seconds(1.4))
-            guard !Task.isCancelled else { return }
-            withAnimation(.easeOut) { toast = nil }
-        }
-    }
-
-    @ViewBuilder
-    private var toastView: some View {
-        if let toast {
-            Text(toast)
-                .font(.caption.weight(.medium))
-                .monospacedDigit()
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Capsule().fill(Theme.card))
-                .padding(.bottom, 64)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-        }
-    }
 }
 
 /// Market selection as a searchable sheet, so the same UI scales from the

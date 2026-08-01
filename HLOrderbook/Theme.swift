@@ -8,18 +8,12 @@ enum Theme {
     static let ask = Color(red: 0.957, green: 0.318, blue: 0.400)
 }
 
-/// Pre-warmed haptic generators for user interactions.
+/// Pre-warmed haptic generator for user interactions.
 enum Haptics {
     private static let selectionGenerator = UISelectionFeedbackGenerator()
-    private static let impactGenerator = UIImpactFeedbackGenerator(style: .light)
 
     static func selection() {
         selectionGenerator.selectionChanged()
         selectionGenerator.prepare()
-    }
-
-    static func lightTap() {
-        impactGenerator.impactOccurred()
-        impactGenerator.prepare()
     }
 }

@@ -13,10 +13,6 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		AB0000000000000000000002 /* HLOrderbook */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			explicitFileTypes = {
-			};
-			explicitFolders = (
-			);
 			path = HLOrderbook;
 			sourceTree = "<group>";
 		};

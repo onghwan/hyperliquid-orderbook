@@ -36,13 +36,20 @@ connects straight to `wss://api.hyperliquid.xyz/ws`.
   so it stays exact regardless of how coarsely the book is grouped (a mid
   derived from $1,000 buckets would be off by hundreds). It ticks with a
   numeric text transition and colors by direction.
+- **Level inspector** — press and hold a row to open a native popover with
+  what it would take to sweep the book down to that depth: the fill price,
+  distance from mid, average price, and cumulative size in coin and USDC.
+  Keep dragging and the inspector follows the finger from level to level,
+  with a selection haptic at each one. The inspector pins the depth — "the
+  Nth level out from the spread" — so as the market moves the highlight stays
+  on the same rung of the ladder and every figure updates live.
 - **Change feedback** — cumulative depth bars animate as liquidity moves, and
   a row flashes in its side's color when something notable happens at that
   price: a genuinely new level, or its resting size doubling or halving.
   Levels that merely scroll in past the far edge of the window don't flash, so
   the effect stays rare enough to mean something.
-- **Haptics** — selection feedback when changing symbol, grouping, or units;
-  a light impact when tapping a row to copy its price.
+- **Haptics** — selection feedback when changing symbol, grouping, or units,
+  and as the level inspector moves from row to row.
 - **Resilience** — keep-alive pings every 45 s, automatic reconnection with
   exponential backoff, and the socket is torn down/restored as the app
   backgrounds/foregrounds.
@@ -57,7 +64,7 @@ OrderbookViewModel  turns snapshots into fixed-identity row slots, coalesces
                     bursts to ≤10 UI applies/sec, pre-formats all strings.
 OrderbookView       the book: scroll view anchored on the spread, depth bars.
 ContentView         header bar (market picker, live mid price), bottom toolbar
-                    (grouping menu, unit toggle), and the copy toast.
+                    (grouping menu, unit toggle).
 ```
 
 Performance notes:

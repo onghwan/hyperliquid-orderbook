@@ -32,11 +32,20 @@ final class OrderbookViewModel {
         var id: String { rawValue }
     }
 
+    /// What it would take to sweep the book from the spread down to a depth.
+    struct LevelStats: Equatable {
+        var distance: String
+        var averagePrice: String
+        var totalCoin: String
+        var totalUsdc: String
+    }
+
     /// One visual slot of the book. Slots have a fixed identity ("ask-3") so
     /// SwiftUI updates row contents in place instead of inserting/removing
     /// rows, which keeps the book visually stable while prices move.
     struct Row: Identifiable, Equatable {
         let id: String
+        let slot: Int               // 0 = best level of its side
         var rawPrice = ""
         var priceText = ""
         var sizeText = ""
@@ -176,8 +185,8 @@ final class OrderbookViewModel {
     private let sizeFormatter: NumberFormatter
 
     init() {
-        asks = (0..<Self.depthLevels).map { Row(id: "ask-\($0)") }
-        bids = (0..<Self.depthLevels).map { Row(id: "bid-\($0)") }
+        asks = (0..<Self.depthLevels).map { Row(id: "ask-\($0)", slot: $0) }
+        bids = (0..<Self.depthLevels).map { Row(id: "bid-\($0)", slot: $0) }
 
         priceFormatter = NumberFormatter()
         priceFormatter.numberStyle = .decimal
@@ -370,6 +379,45 @@ final class OrderbookViewModel {
         spreadPercentText = String(format: "%.3f%%", pct)
     }
 
+    private var currentMid: Double? {
+        guard let bidRaw = bidLevels.first?.px, let bestBid = Double(bidRaw),
+              let askRaw = askLevels.first?.px, let bestAsk = Double(askRaw) else { return nil }
+        return (bestBid + bestAsk) / 2
+    }
+
+    /// The deepest level actually available for a pinned depth: the inspector
+    /// pins "the Nth level out from the spread", clamped when the book is
+    /// momentarily shallower than that.
+    func clampedDepth(_ depth: Int, isAsk: Bool) -> Int? {
+        let count = (isAsk ? askLevels : bidLevels).count
+        guard count > 0 else { return nil }
+        return min(depth, count - 1)
+    }
+
+    /// Cumulative figures for sweeping the book from the spread down to the
+    /// given 0-based depth.
+    func stats(atDepth depth: Int, isAsk: Bool) -> LevelStats? {
+        guard let mid = currentMid, mid > 0 else { return nil }
+
+        var coin = 0.0
+        var notional = 0.0
+        var deepest: Double?
+        for level in (isAsk ? askLevels : bidLevels).prefix(depth + 1) {
+            guard let price = Double(level.px), let size = Double(level.sz) else { continue }
+            coin += size
+            notional += size * price
+            deepest = price
+        }
+        guard coin > 0, let deepest else { return nil }
+
+        return LevelStats(
+            distance: String(format: "%.4f%%", abs(deepest - mid) / mid * 100),
+            averagePrice: format(notional / coin, decimals: tickDecimals),
+            totalCoin: formatSize(coin, decimals: Self.coinSizeDecimals),
+            totalUsdc: formatSize(notional, decimals: 0)
+        )
+    }
+
     private func apply(_ context: AssetContext) {
         guard let mark = Double(context.ctx.markPx) else { return }
 
@@ -414,7 +462,10 @@ final class OrderbookViewModel {
     }
 
     private func formatSize(_ value: Double) -> String {
-        let decimals = sizeUnit == .coin ? Self.coinSizeDecimals : 0
+        formatSize(value, decimals: sizeUnit == .coin ? Self.coinSizeDecimals : 0)
+    }
+
+    private func formatSize(_ value: Double, decimals: Int) -> String {
         sizeFormatter.minimumFractionDigits = decimals
         sizeFormatter.maximumFractionDigits = decimals
         return sizeFormatter.string(from: value as NSNumber) ?? String(value)
