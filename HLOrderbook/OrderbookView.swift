@@ -17,6 +17,11 @@ struct OrderbookView: View {
     var model: OrderbookViewModel
     var onCopyPrice: (String) -> Void
 
+    // Rows track Dynamic Type, and their height grows with them so taller
+    // text is never clipped.
+    @ScaledMetric(relativeTo: .footnote) private var rowFontSize: CGFloat = 13
+    @ScaledMetric(relativeTo: .footnote) private var rowHeight: CGFloat = 24
+
     var body: some View {
         VStack(spacing: 6) {
             columnHeader
@@ -25,13 +30,13 @@ struct OrderbookView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 2) {
                         ForEach(model.asks.reversed()) { row in
-                            LevelRowView(row: row, side: .ask, onCopy: onCopyPrice)
+                            LevelRowView(row: row, side: .ask, fontSize: rowFontSize, height: rowHeight, onCopy: onCopyPrice)
                         }
                         SpreadRowView(spreadText: model.spreadText, percentText: model.spreadPercentText)
                             .id("spread")
                             .padding(.vertical, 4)
                         ForEach(model.bids) { row in
-                            LevelRowView(row: row, side: .bid, onCopy: onCopyPrice)
+                            LevelRowView(row: row, side: .bid, fontSize: rowFontSize, height: rowHeight, onCopy: onCopyPrice)
                         }
                     }
                     .padding(.bottom, 8)
@@ -62,6 +67,8 @@ struct OrderbookView: View {
         }
         .font(.caption2)
         .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
         .padding(.horizontal, 8)
     }
 
@@ -77,11 +84,16 @@ struct OrderbookView: View {
     }
 }
 
-/// A single price level with a depth bar growing from the trailing edge.
+/// A single price level. The depth bar grows from the trailing edge, and the
+/// row flashes when something notable happens at that price.
 struct LevelRowView: View {
     let row: OrderbookViewModel.Row
     let side: BookSide
+    let fontSize: CGFloat
+    let height: CGFloat
     var onCopy: (String) -> Void
+
+    @State private var flashOpacity = 0.0
 
     var body: some View {
         HStack(spacing: 8) {
@@ -95,10 +107,12 @@ struct LevelRowView: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .font(.system(size: 13, weight: .medium))
+        .font(.system(size: fontSize, weight: .medium))
         .monospacedDigit()
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
         .padding(.horizontal, 8)
-        .frame(height: 24)
+        .frame(height: height)
         .background {
             GeometryReader { geo in
                 RoundedRectangle(cornerRadius: 3)
@@ -108,10 +122,19 @@ struct LevelRowView: View {
             }
             .animation(.easeOut(duration: 0.22), value: row.depth)
         }
+        .overlay {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(side.tint.opacity(flashOpacity))
+                .allowsHitTesting(false)
+        }
         .contentShape(Rectangle())
         .onTapGesture {
             guard !row.isEmpty else { return }
             onCopy(row.rawPrice)
+        }
+        .onChange(of: row.flashTick) {
+            flashOpacity = 0.3
+            withAnimation(.easeOut(duration: 0.8)) { flashOpacity = 0 }
         }
         .opacity(row.isEmpty ? 0 : 1)
     }
@@ -135,6 +158,8 @@ struct SpreadRowView: View {
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
         }
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 10)
         .padding(.vertical, 7)

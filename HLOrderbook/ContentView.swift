@@ -1,13 +1,18 @@
 import SwiftUI
 
 struct ContentView: View {
-    private static let priceFontSize: CGFloat = 28
+    @ScaledMetric(relativeTo: .title) private var priceFontSize: CGFloat = 28
+    @ScaledMetric(relativeTo: .headline) private var symbolFontSize: CGFloat = 19
+    @ScaledMetric(relativeTo: .footnote) private var captionFontSize: CGFloat = 13
+    @ScaledMetric(relativeTo: .caption2) private var chevronFontSize: CGFloat = 10
+    @ScaledMetric(relativeTo: .headline) private var logoSize: CGFloat = 26
 
     @State private var model = OrderbookViewModel()
     @State private var showsMarketPicker = false
     @State private var toast: String?
     @State private var toastTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(spacing: 14) {
@@ -47,13 +52,13 @@ struct ContentView: View {
                 HStack(spacing: 8) {
                     Image(model.coin.iconName)
                         .resizable()
-                        .frame(width: 26, height: 26)
+                        .frame(width: logoSize, height: logoSize)
                         .clipShape(Circle())
                     Text(model.coin.rawValue)
-                        .font(.system(size: 19, weight: .semibold, design: .rounded))
+                        .font(.system(size: symbolFontSize, weight: .semibold, design: .rounded))
                         .foregroundStyle(.primary)
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: chevronFontSize, weight: .bold))
                         .foregroundStyle(.secondary)
                 }
                 .contentShape(Rectangle())
@@ -68,29 +73,59 @@ struct ContentView: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 if model.priceDirection != .flat {
                     Image(systemName: model.priceDirection == .up ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
-                        .font(.system(size: 13))
+                        .font(.system(size: captionFontSize))
                         .foregroundStyle(color(for: model.priceDirection))
                         // Centre the arrow on the digits instead of sitting it
                         // on their baseline: the price's cap-height centre is
                         // roughly 35% of its font size above it.
                         .alignmentGuide(.firstTextBaseline) {
-                            $0[VerticalAlignment.center] + Self.priceFontSize * 0.35
+                            $0[VerticalAlignment.center] + priceFontSize * 0.35
                         }
                 }
                 Text(model.priceText)
-                    .font(.system(size: Self.priceFontSize, weight: .semibold, design: .rounded))
+                    .font(.system(size: priceFontSize, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(color(for: model.priceDirection))
                     .contentTransition(.numericText())
                     .animation(.snappy(duration: 0.25), value: model.priceText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
                 Text("USDC")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .font(.system(size: captionFontSize, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(RoundedRectangle(cornerRadius: 12).fill(Theme.card))
+    }
+
+    /// Feeds the segmented control a font scaled for the current text size,
+    /// clamped by the app-wide Dynamic Type cap like everything else.
+    private func scaleSegmentedTitles() {
+        let base = UIFont.systemFont(ofSize: 13, weight: .medium)
+        let traits = UITraitCollection(preferredContentSizeCategory: Self.sizeCategory(for: dynamicTypeSize))
+        let scaled = UIFontMetrics(forTextStyle: .footnote).scaledFont(for: base, compatibleWith: traits)
+        UISegmentedControl.appearance().setTitleTextAttributes([.font: scaled], for: .normal)
+        UISegmentedControl.appearance().setTitleTextAttributes([.font: scaled], for: .selected)
+    }
+
+    private static func sizeCategory(for size: DynamicTypeSize) -> UIContentSizeCategory {
+        switch size {
+        case .xSmall: .extraSmall
+        case .small: .small
+        case .medium: .medium
+        case .large: .large
+        case .xLarge: .extraLarge
+        case .xxLarge: .extraExtraLarge
+        case .xxxLarge: .extraExtraExtraLarge
+        case .accessibility1: .accessibilityMedium
+        case .accessibility2: .accessibilityLarge
+        case .accessibility3: .accessibilityExtraLarge
+        case .accessibility4: .accessibilityExtraExtraLarge
+        case .accessibility5: .accessibilityExtraExtraExtraLarge
+        @unknown default: .large
+        }
     }
 
     private func color(for direction: OrderbookViewModel.Direction) -> Color {
@@ -113,6 +148,14 @@ struct ContentView: View {
             }
             .pickerStyle(.segmented)
             .frame(width: 150)
+            // UISegmentedControl ignores SwiftUI fonts and doesn't track
+            // Dynamic Type on its own, so its titles are scaled by hand
+            // whenever the setting changes.
+            .onAppear { scaleSegmentedTitles() }
+            .onChange(of: dynamicTypeSize) { scaleSegmentedTitles() }
+            // The appearance proxy only affects controls created afterwards,
+            // so rebuild this one when the setting changes.
+            .id(dynamicTypeSize)
         }
         .padding(.horizontal, 16)
         .padding(.top, 10)
@@ -144,7 +187,7 @@ struct ContentView: View {
                 // Mirrors the market button's chevron, pointing the way this
                 // menu opens.
                 Image(systemName: "chevron.up")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: chevronFontSize, weight: .bold))
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 12)

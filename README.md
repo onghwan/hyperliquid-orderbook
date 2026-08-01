@@ -36,7 +36,11 @@ connects straight to `wss://api.hyperliquid.xyz/ws`.
   so it stays exact regardless of how coarsely the book is grouped (a mid
   derived from $1,000 buckets would be off by hundreds). It ticks with a
   numeric text transition and colors by direction.
-- **Change feedback** — cumulative depth bars animate as liquidity moves.
+- **Change feedback** — cumulative depth bars animate as liquidity moves, and
+  a row flashes in its side's color when something notable happens at that
+  price: a genuinely new level, or its resting size doubling or halving.
+  Levels that merely scroll in past the far edge of the window don't flash, so
+  the effect stays rare enough to mean something.
 - **Haptics** — selection feedback when changing symbol, grouping, or units;
   a light impact when tapping a row to copy its price.
 - **Resilience** — keep-alive pings every 45 s, automatic reconnection with
