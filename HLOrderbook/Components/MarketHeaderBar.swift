@@ -55,9 +55,6 @@ struct MarketHeaderBar: View {
                     .animation(.snappy(duration: 0.25), value: model.priceText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
-                Text("USDC")
-                    .font(.system(size: captionFontSize, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
             }
         }
     }

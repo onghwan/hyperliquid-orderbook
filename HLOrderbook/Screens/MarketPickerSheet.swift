@@ -50,6 +50,5 @@ struct MarketPickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search markets")
         }
-        .preferredColorScheme(.dark)
     }
 }

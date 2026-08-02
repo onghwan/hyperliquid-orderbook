@@ -1,13 +1,26 @@
 import SwiftUI
 
 struct SettingsScreen: View {
-    @Bindable var preferences: Preferences
+    @Environment(Preferences.self) var preferences
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
+        @Bindable var bindablePreferences = preferences
+        
         NavigationStack {
             Form {
+                Section("Appearance") {
+                    Picker("Theme", selection: $bindablePreferences.appearance) {
+                        ForEach(AppearanceMode.allCases) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+                .listRowBackground(Theme.card)
+                
                 Section("Feedback") {
-                    Toggle("Haptics", isOn: $preferences.hapticsEnabled)
+                    Toggle("Haptics", isOn: $bindablePreferences.hapticsEnabled)
                 }
                 .listRowBackground(Theme.card)
 
@@ -16,27 +29,14 @@ struct SettingsScreen: View {
                     row("Channels", "l2Book · bbo · activeAssetCtx")
                 }
                 .listRowBackground(Theme.card)
-
-                Section {
-                    row("Version", version)
-                } header: {
-                    Text("About")
-                } footer: {
-                    Text("Coin logos from the CC0 cryptocurrency-icons set.")
-                }
-                .listRowBackground(Theme.card)
             }
             .scrollContentBackground(.hidden)
             .background(Theme.background)
             .navigationTitle("Settings")
         }
-    }
-
-    private var version: String {
-        let info = Bundle.main.infoDictionary
-        let short = info?["CFBundleShortVersionString"] as? String ?? "1.0"
-        let build = info?["CFBundleVersion"] as? String ?? "1"
-        return "\(short) (\(build))"
+        // Not redundant with the app-level modifier: a sheet is its own
+        // presentation and doesn't inherit the colour scheme from the window.
+        .preferredColorScheme(preferences.appearance.colorScheme)
     }
 
     private func row(_ label: String, _ value: String) -> some View {
@@ -51,5 +51,5 @@ struct SettingsScreen: View {
 }
 
 #Preview {
-    SettingsScreen(preferences: Preferences())
+    SettingsScreen()
 }

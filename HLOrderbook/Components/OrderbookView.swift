@@ -33,10 +33,15 @@ private struct RowFramesKey: PreferenceKey {
     }
 }
 
-/// The book itself: asks above, spread in the middle, bids below, in a scroll
-/// view initially anchored on the spread so deeper levels are a swipe away.
+/// The book itself.
+///
+/// Narrow screens get the ladder: asks above, spread in the middle, bids
+/// below, anchored on the spread. Wide ones get the two-column layout, bids
+/// and asks side by side with their prices meeting in the middle — the same
+/// twenty levels per side, but twice as many visible at once.
 struct OrderbookView: View {
     var model: OrderbookViewModel
+    var isWide = false
 
     @State private var selected: SelectedLevel?
     @State private var rowFrames: [RowFrame] = []
@@ -56,15 +61,11 @@ struct OrderbookView: View {
 
         ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 2) {
-                    ForEach(model.asks.reversed()) { row in
-                        levelRow(row, side: .ask, highlighted: target?.level)
-                    }
-                    SpreadRowView(spreadText: model.spreadText, percentText: model.spreadPercentText)
-                        .id("spread")
-                        .padding(.vertical, 4)
-                    ForEach(model.bids) { row in
-                        levelRow(row, side: .bid, highlighted: target?.level)
+                Group {
+                    if isWide {
+                        columns(highlighted: target?.level)
+                    } else {
+                        ladder(highlighted: target?.level)
                     }
                 }
                 .padding(.horizontal, 12)
@@ -85,20 +86,26 @@ struct OrderbookView: View {
                 // A single popover anchored to the target row, rather
                 // than one attached to each of the forty rows.
                 .overlay(alignment: .topLeading) { inspectorAnchor(target) }
+                // Kept in the hierarchy while loading — so the spread row
+                // isn't left sitting there with placeholders, but the layout
+                // is ready to scroll into place the moment the book lands.
+                .opacity(model.hasBook ? 1 : 0)
             }
             .scrollDisabled(selected != nil)
-            // The system's own edge treatment: rows soften as they pass
-            // under the header rather than colliding with the status bar.
-            .softScrollEdges()
             // Centre on the spread once the first book lands, and again
-            // whenever the market changes.
+            // whenever the market changes. Side by side there is no spread
+            // row: both columns already start at the touch of the book.
             .onChange(of: model.hasBook) { _, loaded in
-                if loaded { proxy.scrollTo("spread", anchor: .center) }
+                guard loaded else { return }
+                proxy.scrollTo(isWide ? "top" : "spread", anchor: isWide ? .top : .center)
+            }
+            .onChange(of: isWide) { _, wide in
+                proxy.scrollTo(wide ? "top" : "spread", anchor: wide ? .top : .center)
             }
             .onChange(of: model.coin) {
                 dismissInspector()
                 withAnimation(.snappy) {
-                    proxy.scrollTo("spread", anchor: .center)
+                    proxy.scrollTo(isWide ? "top" : "spread", anchor: isWide ? .top : .center)
                 }
             }
             // Regrouping rebuckets every price, so the inspected level no
@@ -113,6 +120,38 @@ struct OrderbookView: View {
     }
 
     private static let bookSpace = "book"
+
+    private func ladder(highlighted: SelectedLevel?) -> some View {
+        VStack(spacing: 2) {
+            ForEach(model.asks.reversed()) { row in
+                levelRow(row, side: .ask, highlighted: highlighted)
+            }
+            SpreadRowView(spreadText: model.spreadText, percentText: model.spreadPercentText)
+                .id("spread")
+                .padding(.vertical, 4)
+            ForEach(model.bids) { row in
+                levelRow(row, side: .bid, highlighted: highlighted)
+            }
+        }
+    }
+
+    private func columns(highlighted: SelectedLevel?) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(spacing: 2) {
+                ForEach(model.bids) { row in
+                    levelRow(row, side: .bid, highlighted: highlighted, layout: .leftColumn)
+                }
+            }
+            VStack(spacing: 2) {
+                ForEach(model.asks) { row in
+                    levelRow(row, side: .ask, highlighted: highlighted, layout: .rightColumn)
+                }
+            }
+        }
+        // Both columns start at the spread, so the top of the content is
+        // where the action is.
+        .id("top")
+    }
 
     private var inspectorTarget: (level: SelectedLevel, stats: OrderbookViewModel.LevelStats)? {
         guard let selected,
@@ -145,7 +184,12 @@ struct OrderbookView: View {
         }
     }
 
-    private func levelRow(_ row: OrderbookViewModel.Row, side: BookSide, highlighted: SelectedLevel?) -> some View {
+    private func levelRow(
+        _ row: OrderbookViewModel.Row,
+        side: BookSide,
+        highlighted: SelectedLevel?,
+        layout: LevelRowLayout = .ladder
+    ) -> some View {
         let level = SelectedLevel(isAsk: side == .ask, slot: row.slot)
         let isSelected = highlighted == level
         return LevelRowView(
@@ -153,7 +197,8 @@ struct OrderbookView: View {
             side: side,
             fontSize: rowFontSize,
             height: rowHeight,
-            isSelected: isSelected
+            isSelected: isSelected,
+            layout: layout
         )
         // Skips re-rendering rows whose content didn't change in a snapshot.
         .equatable()

@@ -1,11 +1,21 @@
 import SwiftUI
 
-/// Bottom bar: price grouping on the left, size unit on the right.
+/// Bottom bar: price grouping on the left, size unit on the right — plus the
+/// spread in the middle where there's width for it, since the side-by-side
+/// book has no spread row of its own.
 struct BookToolbar: View {
     @Bindable var model: OrderbookViewModel
+    var isWide = false
+    /// The bottom safe area, which the wide bar cancels out for itself.
+    var bottomInset: CGFloat = 0
 
     @ScaledMetric(relativeTo: .caption2) private var chevronFontSize: CGFloat = 10
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var showsSettings = false
+
+    /// Matches the header bar, so the two line up down both edges.
+    private let sideMargin: CGFloat = 12
+    private let cornerRadius: CGFloat = 26
 
     var body: some View {
         HStack {
@@ -13,28 +23,58 @@ struct BookToolbar: View {
 
             Spacer()
 
-            Picker("Unit", selection: $model.sizeUnit) {
-                Text(model.coin.rawValue).tag(OrderbookViewModel.SizeUnit.coin)
-                Text("USDC").tag(OrderbookViewModel.SizeUnit.usdc)
+            HStack(spacing: 8) {
+                unitMenu
+                settingsButton
             }
-            .pickerStyle(.segmented)
-            .frame(width: 150)
-            // UISegmentedControl ignores SwiftUI fonts and doesn't track
-            // Dynamic Type on its own, so its titles are scaled by hand
-            // whenever the setting changes.
-            .onAppear { scaleSegmentedTitles() }
-            .onChange(of: dynamicTypeSize) { scaleSegmentedTitles() }
-            // The appearance proxy only affects controls created afterwards,
-            // so rebuild this one when the setting changes.
-            .id(dynamicTypeSize)
         }
-        // A floating glass bar: the book scrolls beneath it, and it clears
-        // the tab bar below.
+        // Overlaid rather than placed between the controls, so it's centred
+        // on the bar itself and not on whatever space they leave.
+        .overlay {
+            if isWide {
+                spread
+            }
+        }
+        // A glass bar the book scrolls beneath: edge to edge in portrait,
+        // a rounded island matching the header's width in landscape.
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .glassBackground(cornerRadius: 26)
-        .padding(.horizontal, 12)
-        .padding(.bottom, 10)
+        .background(
+            Color.clear
+                .glassBackground(cornerRadius: isWide ? cornerRadius : 0)
+                .ignoresSafeArea(edges: isWide ? [] : .bottom)
+                // The glass layer keeps the appearance it was built with, so
+                // switching themes needs it rebuilt rather than redrawn.
+                .id(colorScheme)
+            )
+        .padding(.horizontal, isWide ? sideMargin : 0)
+        // Landscape's home indicator sits on a thin edge, so the bar runs
+        // flush to it with even padding above and below. Cancelling the inset
+        // by hand: `ignoresSafeArea` has no effect on a view that is itself a
+        // safe-area inset.
+        .padding(.bottom, isWide ? -bottomInset : 0)
+        .sheet(isPresented: $showsSettings) {
+            SettingsScreen()
+                .presentationDetents([.large])
+        }
+    }
+
+    private var spread: some View {
+        HStack(spacing: 14) {
+            Text("Spread")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+            Text(model.spreadText)
+                .font(.caption.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(.primary)
+            Text(model.spreadPercentText)
+                .font(.caption.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+        }
+        .lineLimit(1)
+        .allowsHitTesting(false)
     }
 
     /// Price grouping — the same `nSigFigs` control, labelled by the tick it
@@ -61,37 +101,50 @@ struct BookToolbar: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(Capsule().fill(Theme.card))
+            .background(.ultraThinMaterial, in: Capsule())
         }
         .tint(.primary)
         .accessibilityLabel("Price grouping")
     }
-
-    /// Feeds the segmented control a font scaled for the current text size,
-    /// clamped by the app-wide Dynamic Type cap like everything else.
-    private func scaleSegmentedTitles() {
-        let base = UIFont.systemFont(ofSize: 13, weight: .medium)
-        let traits = UITraitCollection(preferredContentSizeCategory: Self.sizeCategory(for: dynamicTypeSize))
-        let scaled = UIFontMetrics(forTextStyle: .footnote).scaledFont(for: base, compatibleWith: traits)
-        UISegmentedControl.appearance().setTitleTextAttributes([.font: scaled], for: .normal)
-        UISegmentedControl.appearance().setTitleTextAttributes([.font: scaled], for: .selected)
-    }
-
-    private static func sizeCategory(for size: DynamicTypeSize) -> UIContentSizeCategory {
-        switch size {
-        case .xSmall: .extraSmall
-        case .small: .small
-        case .medium: .medium
-        case .large: .large
-        case .xLarge: .extraLarge
-        case .xxLarge: .extraExtraLarge
-        case .xxxLarge: .extraExtraExtraLarge
-        case .accessibility1: .accessibilityMedium
-        case .accessibility2: .accessibilityLarge
-        case .accessibility3: .accessibilityExtraLarge
-        case .accessibility4: .accessibilityExtraExtraLarge
-        case .accessibility5: .accessibilityExtraExtraExtraLarge
-        @unknown default: .large
+    
+    private var unitMenu: some View {
+        Menu {
+            Picker("Unit", selection: $model.sizeUnit) {
+                Text(model.coin.rawValue).tag(OrderbookViewModel.SizeUnit.coin)
+                Text("USDC").tag(OrderbookViewModel.SizeUnit.usdc)
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(model.unitLabel)
+                    .font(.caption.weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(.primary)
+                // Mirrors the market button's chevron, pointing the way this
+                // menu opens.
+                Image(systemName: "chevron.up")
+                    .font(.system(size: chevronFontSize, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial, in: Capsule())
         }
+        .tint(.primary)
+        .accessibilityLabel("Unit")
+    }
+    
+    private var settingsButton: some View {
+        Button {
+            showsSettings = true
+        } label: {
+            Image(systemName: "gearshape.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial, in: Capsule())
+        }
+        .tint(.primary)
+        .accessibilityLabel("Settings")
     }
 }

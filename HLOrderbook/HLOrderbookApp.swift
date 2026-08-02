@@ -2,6 +2,8 @@ import SwiftUI
 
 @main
 struct HLOrderbookApp: App {
+    @State private var preferences = Preferences()
+    
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -10,6 +12,8 @@ struct HLOrderbookApp: App {
                 // longer fit side by side. Capping here rather than inside
                 // the screen keeps its own @ScaledMetric values in range too.
                 .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                .environment(preferences)
+                .preferredColorScheme(preferences.appearance.colorScheme)
         }
     }
 }
