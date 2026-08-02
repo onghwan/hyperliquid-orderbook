@@ -60,9 +60,6 @@ struct MarketHeaderBar: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.card))
     }
 
     private var priceColor: Color {

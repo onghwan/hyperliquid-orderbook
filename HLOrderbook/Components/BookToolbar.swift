@@ -28,13 +28,13 @@ struct BookToolbar: View {
             // so rebuild this one when the setting changes.
             .id(dynamicTypeSize)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(.white.opacity(0.08))
-                .frame(height: 1)
-        }
+        // A floating glass bar: the book scrolls beneath it, and it clears
+        // the tab bar below.
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .glassBackground(cornerRadius: 26)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 10)
     }
 
     /// Price grouping — the same `nSigFigs` control, labelled by the tick it
