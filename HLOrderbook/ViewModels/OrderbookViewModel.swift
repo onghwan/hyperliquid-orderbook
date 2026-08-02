@@ -17,7 +17,6 @@ final class OrderbookViewModel {
             case .eth: "CoinETH"
             }
         }
-
     }
 
     enum Direction {
@@ -51,7 +50,7 @@ final class OrderbookViewModel {
         var sizeText = ""
         var totalText = ""
         var depth: CGFloat = 0      // 0…1 share of the deepest visible total
-        var flashTick = 0           // bumped when a new price level lands here
+        var flashTick = 0           // bumped when this slot should flash
         var isEmpty = true
     }
 
@@ -66,9 +65,10 @@ final class OrderbookViewModel {
     private static let summaryInterval: Duration = .milliseconds(500)
     /// Decimals shown for coin-denominated sizes and totals.
     private static let coinSizeDecimals = 5
-    /// A level also flashes when its resting size moves by at least this
-    /// fraction — a double or a halving — so routine market-maker churn
-    /// stays quiet.
+    /// A level also flashes when its resting size grows by at least this
+    /// fraction of itself — a doubling — so routine market-maker churn stays
+    /// quiet. Shrinking can't reach it (a level can only lose all of its
+    /// size, and then the level itself is gone).
     private static let flashThreshold = 1.0
 
     private(set) var asks: [Row]    // asks[0] is the best ask
@@ -109,9 +109,7 @@ final class OrderbookViewModel {
     /// digits buckets prices into steps of 10^(d - n); `mantissa` (valid only
     /// at 5 significant figures) widens the finest bucket to 2× or 5×.
     var groupingOptions: [GroupingOption] {
-        guard let px = bidLevels.first?.px ?? askLevels.first?.px,
-              let price = Double(px), price > 0 else { return [] }
-        let digits = Int(floor(log10(price))) + 1
+        guard let digits = priceDigits else { return [] }
         let finestStep = pow(10.0, Double(digits - 5))
         let fine = [
             (Grouping.finest, finestStep),
@@ -130,12 +128,19 @@ final class OrderbookViewModel {
         groupingOptions.first { $0.grouping == grouping }?.label ?? "—"
     }
 
+    /// Digit count of the current price, which sets every tick size. Falls
+    /// back to the mark price so re-grouping — which empties the book until
+    /// the next snapshot — doesn't blank the toolbar's label.
+    private var priceDigits: Int? {
+        let raw = bidLevels.first?.px ?? askLevels.first?.px
+        guard let price = raw.flatMap(Double.init) ?? previousMark, price > 0 else { return nil }
+        return Int(floor(log10(price))) + 1
+    }
+
     /// Decimals the selected tick needs, so a $0.1 book shows "1,869.0"
     /// while a $1 book shows "63,083".
     private var tickDecimals: Int {
-        guard let px = bidLevels.first?.px ?? askLevels.first?.px,
-              let price = Double(px), price > 0 else { return 0 }
-        let digits = Int(floor(log10(price))) + 1
+        guard let digits = priceDigits else { return 0 }
         var step = pow(10.0, Double(digits - (grouping.nSigFigs ?? 5)))
         step *= Double(grouping.mantissa ?? 1)
         return max(0, Int(ceil(-log10(step))))

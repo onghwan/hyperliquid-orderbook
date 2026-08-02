@@ -11,13 +11,11 @@ enum BookSide {
     }
 }
 
-/// The book itself: asks above, spread in the middle, bids below, in a scroll
-/// view initially anchored on the spread so deeper levels are a swipe away.
-/// Identifies the level whose stats popover is open.
-/// The inspector pins a depth — "the Nth level out from the spread" — so as
-/// the market moves, the highlight stays on the same rung of the ladder and
-/// every figure in the panel updates live.
-struct SelectedLevel: Equatable, Hashable {
+/// Identifies the level whose stats popover is open. The inspector pins a
+/// depth — "the Nth level out from the spread" — so as the market moves, the
+/// highlight stays on the same rung of the ladder and every figure in the
+/// panel updates live.
+struct SelectedLevel: Equatable {
     let isAsk: Bool
     let slot: Int
 }
@@ -35,6 +33,8 @@ private struct RowFramesKey: PreferenceKey {
     }
 }
 
+/// The book itself: asks above, spread in the middle, bids below, in a scroll
+/// view initially anchored on the spread so deeper levels are a swipe away.
 struct OrderbookView: View {
     var model: OrderbookViewModel
 
@@ -50,8 +50,8 @@ struct OrderbookView: View {
     @ScaledMetric(relativeTo: .footnote) private var rowHeight: CGFloat = 24
 
     var body: some View {
-        // Resolved once per render: the level the pinned distance reaches in
-        // the current book, and the stats of sweeping there.
+        // Resolved once per render: the level the pinned depth reaches in the
+        // current book, and the stats of sweeping there.
         let target = inspectorTarget
 
         VStack(spacing: 6) {
@@ -203,133 +203,8 @@ struct OrderbookView: View {
     }
 
     private var loadingOverlay: some View {
-        VStack(spacing: 10) {
-            ProgressView()
-            Text("Waiting for the book…")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .padding(24)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Theme.card))
-    }
-}
-
-/// A single price level. The depth bar grows from the trailing edge, and the
-/// row flashes when something notable happens at that price.
-struct LevelRowView: View, Equatable {
-    let row: OrderbookViewModel.Row
-    let side: BookSide
-    let fontSize: CGFloat
-    let height: CGFloat
-    let isSelected: Bool
-
-    @State private var flashOpacity = 0.0
-
-    // Hand-written because @State isn't Equatable; comparing just the data is
-    // what lets unchanged rows skip their body.
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.row == rhs.row && lhs.side == rhs.side && lhs.isSelected == rhs.isSelected
-            && lhs.fontSize == rhs.fontSize && lhs.height == rhs.height
-    }
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(row.priceText)
-                .foregroundStyle(side.tint)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Text(row.sizeText)
-                .foregroundStyle(.primary)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-            Text(row.totalText)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-        .font(.system(size: fontSize, weight: .medium))
-        .monospacedDigit()
-        .lineLimit(1)
-        .minimumScaleFactor(0.75)
-        .padding(.horizontal, 8)
-        .frame(height: height)
-        .background {
-            // A trailing-anchored scale is a pure transform — no per-row
-            // GeometryReader and no layout pass when the depth changes.
-            RoundedRectangle(cornerRadius: 3)
-                .fill(side.tint.opacity(0.14))
-                .scaleEffect(x: max(0.001, row.depth), y: 1, anchor: .trailing)
-                .animation(.easeOut(duration: 0.22), value: row.depth)
-        }
-        .overlay {
-            if flashOpacity > 0 || isSelected {
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(side.tint.opacity(flashOpacity))
-                    .overlay { if isSelected { RoundedRectangle(cornerRadius: 3).fill(.white.opacity(0.1)) } }
-                    .allowsHitTesting(false)
-            }
-        }
-        .onChange(of: row.flashTick) {
-            flashOpacity = 0.3
-            withAnimation(.easeOut(duration: 0.8)) { flashOpacity = 0 }
-        }
-        .opacity(row.isEmpty ? 0 : 1)
-    }
-}
-
-/// What a market order sweeping down to the pinned depth would cost.
-/// Values refresh in place while the popover stays open.
-struct LevelStatsView: View {
-    let stats: OrderbookViewModel.LevelStats?
-    let coin: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            if let stats {
-                row("Distance from Mid", stats.distance)
-                row("Average Price", stats.averagePrice)
-                row("Total (\(coin))", stats.totalCoin)
-                row("Total (USDC)", stats.totalUsdc)
-            }
-        }
-        .padding(18)
-        .frame(width: 268)
-    }
-
-    private func row(_ label: String, _ value: String) -> some View {
-        HStack {
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 16)
-            Text(value)
-                .font(.caption.weight(.semibold))
-                .monospacedDigit()
-                .foregroundStyle(.primary)
-        }
-    }
-}
-
-struct SpreadRowView: View {
-    let spreadText: String
-    let percentText: String
-
-    var body: some View {
-        HStack(spacing: 18) {
-            Text("Spread")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-            Text(spreadText)
-                .font(.caption.weight(.semibold))
-                .monospacedDigit()
-                .foregroundStyle(.primary)
-            Text(percentText)
-                .font(.caption.weight(.semibold))
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-        }
-        .lineLimit(1)
-        .minimumScaleFactor(0.75)
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.card))
+        ProgressView()
+            .padding(24)
+            .background(RoundedRectangle(cornerRadius: 14).fill(Theme.card))
     }
 }

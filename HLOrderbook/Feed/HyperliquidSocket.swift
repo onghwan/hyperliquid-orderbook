@@ -133,10 +133,10 @@ final class HyperliquidSocket {
               let peek = try? decoder.decode(ChannelPeek.self, from: data)
         else { return }
 
-        // Frames for a stream we've already switched away from are dropped.
         // Any successful frame proves the connection is healthy again.
         reconnectAttempt = 0
 
+        // Each case drops frames for a coin we've already switched away from.
         switch peek.channel {
         case "l2Book":
             guard let book = try? decoder.decode(L2BookMessage.self, from: data).data else { return }
