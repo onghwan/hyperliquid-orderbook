@@ -51,17 +51,26 @@ struct MarketHeaderBar: View {
                 // in their own HStack would hand the outer row a centre-
                 // aligned baseline that shifts whenever the arrow appears.
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    if model.priceDirection != .flat {
-                        Image(systemName: model.priceDirection == .up ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
-                            .font(.system(size: captionFontSize))
-                            .foregroundStyle(priceColor)
-                            // Centre the arrow on the digits instead of sitting
-                            // it on their baseline: the price's cap-height
-                            // centre is roughly 35% of its font size above it.
-                            .alignmentGuide(.firstTextBaseline) {
-                                $0[VerticalAlignment.center] + priceFontSize * 0.35
-                            }
-                    }
+                    // Always in the layout, invisible until there's a direction
+                    // to show. Inserting it on the first tick would widen the
+                    // row, and that resize rides the price's roll animation and
+                    // slides the digits sideways.
+                    Image(systemName: model.priceDirection == .down ? "arrowtriangle.down.fill" : "arrowtriangle.up.fill")
+                        .font(.system(size: captionFontSize))
+                        .foregroundStyle(priceColor)
+                        .opacity(model.priceDirection == .flat ? 0 : 1)
+                        // Rolls with the digits, on the price's own curve.
+                        // `offUp` rather than a plain replace: the old triangle
+                        // clears out before the new one rises, so the two
+                        // directions never overlap into an ambiguous shape.
+                        .contentTransition(.symbolEffect(.replace.offUp))
+                        .animation(.snappy(duration: 0.25), value: model.priceDirection)
+                        // Centre the arrow on the digits instead of sitting
+                        // it on their baseline: the price's cap-height
+                        // centre is roughly 35% of its font size above it.
+                        .alignmentGuide(.firstTextBaseline) {
+                            $0[VerticalAlignment.center] + priceFontSize * 0.35
+                        }
                     Text(model.priceText)
                         .font(.system(size: priceFontSize, weight: .semibold, design: .rounded))
                         .monospacedDigit()

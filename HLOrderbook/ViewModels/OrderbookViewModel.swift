@@ -65,6 +65,9 @@ final class OrderbookViewModel {
     private static let summaryInterval: Duration = .milliseconds(500)
     /// Decimals shown for coin-denominated sizes and totals.
     private static let coinSizeDecimals = 5
+    /// Significant figures in the header price, which fixes its decimals per
+    /// market without naming any of them.
+    private static let headerSignificantDigits = 5
     /// A level also flashes when its resting size grows by at least this
     /// fraction of itself — a doubling — so routine market-maker churn stays
     /// quiet. Shrinking can't reach it (a level can only lose all of its
@@ -493,7 +496,7 @@ final class OrderbookViewModel {
             priceDirection = mark > previousMark ? .up : .down
         }
         previousMark = mark
-        priceText = trimmed(mark, decimals: decimals(in: context.ctx.markPx))
+        priceText = format(mark, decimals: headerDecimals(for: mark))
     }
 
     // MARK: - Formatting
@@ -517,6 +520,18 @@ final class OrderbookViewModel {
         priceFormatter.minimumFractionDigits = 0
         priceFormatter.maximumFractionDigits = decimals
         return priceFormatter.string(from: value as NSNumber) ?? String(value)
+    }
+
+    /// How many decimals the header shows, taken from the price's size rather
+    /// than a table of coins: always five significant figures. BTC near
+    /// $63,000 already has five digits before the point and shows none after;
+    /// ETH near $1,900 has four and shows one. The count only changes when a
+    /// price crosses a power of ten, so the header holds its width instead of
+    /// growing and shrinking with whatever the feed happens to send.
+    private func headerDecimals(for value: Double) -> Int {
+        guard value > 0 else { return 0 }
+        let integerDigits = Int(floor(log10(value))) + 1
+        return min(8, max(0, Self.headerSignificantDigits - integerDigits))
     }
 
     private func decimals(in raw: String) -> Int {
