@@ -43,6 +43,11 @@ struct OrderbookView: View {
     var model: OrderbookViewModel
     var isWide = false
 
+    /// Drives the opening animation: rows start stacked where the spread is
+    /// and fan out to their places, nearest first.
+    @State private var unfolded = false
+    @State private var unfoldTask: Task<Void, Never>?
+
     @State private var selected: SelectedLevel?
     @State private var rowFrames: [RowFrame] = []
     /// Where the inspected level was last seen, so the popover stays put if
@@ -86,18 +91,25 @@ struct OrderbookView: View {
                 // A single popover anchored to the target row, rather
                 // than one attached to each of the forty rows.
                 .overlay(alignment: .topLeading) { inspectorAnchor(target) }
-                // Kept in the hierarchy while loading — so the spread row
-                // isn't left sitting there with placeholders, but the layout
-                // is ready to scroll into place the moment the book lands.
-                .opacity(model.hasBook ? 1 : 0)
             }
             .scrollDisabled(selected != nil)
             // Centre on the spread once the first book lands, and again
             // whenever the market changes. Side by side there is no spread
             // row: both columns already start at the touch of the book.
             .onChange(of: model.hasBook) { _, loaded in
-                guard loaded else { return }
+                unfoldTask?.cancel()
+                guard loaded else {
+                    unfolded = false
+                    return
+                }
                 proxy.scrollTo(isWide ? "top" : "spread", anchor: isWide ? .top : .center)
+                // A beat before unfolding, so the fold reads as finished
+                // rather than reversing into the new book.
+                unfoldTask = Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(150))
+                    guard !Task.isCancelled else { return }
+                    unfolded = true
+                }
             }
             .onChange(of: isWide) { _, wide in
                 proxy.scrollTo(wide ? "top" : "spread", anchor: wide ? .top : .center)
@@ -129,6 +141,10 @@ struct OrderbookView: View {
             SpreadRowView(spreadText: model.spreadText, percentText: model.spreadPercentText)
                 .id("spread")
                 .padding(.vertical, 4)
+                // Hidden between books, so it's never left showing
+                // placeholders while the rows fold and unfold around it.
+                .opacity(model.hasBook ? 1 : 0)
+                .animation(.easeOut(duration: 0.15), value: model.hasBook)
             ForEach(model.bids) { row in
                 levelRow(row, side: .bid, highlighted: highlighted)
             }
@@ -214,6 +230,49 @@ struct OrderbookView: View {
                 }
             }
         }
+        // Each animation sits directly above the property it drives: an
+        // animation modifier only governs what's below it, so opacity has to
+        // come first or its fade is dropped and it switches outright.
+        .opacity(unfolded ? 1 : 0)
+        .animation(fadeAnimation(slot: row.slot), value: unfolded)
+        // An offset, not a layout change, so the fan-out costs nothing but a
+        // transform — and the rows stay where the inspector expects them.
+        // Unfolds from the spread outwards and folds back the other way, the
+        // far rows leaving first, so the book gathers into the spread rather
+        // than stalling at its edges while the next one loads.
+        .offset(y: unfolded ? 0 : collapsedOffset(slot: row.slot, isAsk: side == .ask))
+        .animation(travelAnimation(slot: row.slot), value: unfolded)
+    }
+
+    private static let rowStagger = 0.006
+
+    private func travelAnimation(slot: Int) -> Animation {
+        unfolded
+            ? .spring(response: 0.34, dampingFraction: 0.82).delay(delay(slot: slot))
+            : .spring(response: 0.28, dampingFraction: 0.9).delay(delay(slot: slot))
+    }
+
+    private func fadeAnimation(slot: Int) -> Animation {
+        unfolded
+            ? .easeOut(duration: 0.28).delay(delay(slot: slot))
+            : .easeIn(duration: 0.2).delay(delay(slot: slot))
+    }
+
+    /// Nearest the spread leads the way out; the outermost row leads the way
+    /// back in.
+    private func delay(slot: Int) -> Double {
+        let step = unfolded ? slot : (OrderbookViewModel.depthLevels - 1 - slot)
+        return Double(step) * Self.rowStagger
+    }
+
+    /// Where a row sits before it unfolds: stacked on the spread in the
+    /// ladder, on the first row in the two-column layout.
+    private func collapsedOffset(slot: Int, isAsk: Bool) -> CGFloat {
+        let step = rowHeight + 2
+        if isWide {
+            return -CGFloat(slot) * step
+        }
+        return CGFloat(slot + 1) * step * (isAsk ? 1 : -1)
     }
 
     private func level(at point: CGPoint) -> SelectedLevel? {

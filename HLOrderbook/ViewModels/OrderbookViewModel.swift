@@ -81,14 +81,18 @@ final class OrderbookViewModel {
     private(set) var spreadPercentText = "—"
     private(set) var hasBook = false
 
+    /// Restored on launch, so the app opens on the market last looked at.
     var coin: Coin = .btc {
         didSet {
             guard coin != oldValue else { return }
             Haptics.selection()
+            store.set(coin.rawValue, forKey: Self.coinKey)
             resetContext()
             resubscribe()
         }
     }
+
+    private static let coinKey = "selectedCoin"
 
     /// The feed parameters behind one price-grouping choice.
     struct Grouping: Hashable {
@@ -196,10 +200,18 @@ final class OrderbookViewModel {
 
     private let priceFormatter: NumberFormatter
     private let sizeFormatter: NumberFormatter
+    private let store: UserDefaults
 
-    init() {
+    init(store: UserDefaults = .standard) {
+        self.store = store
         asks = (0..<Self.depthLevels).map { Row(id: "ask-\($0)", slot: $0) }
         bids = (0..<Self.depthLevels).map { Row(id: "bid-\($0)", slot: $0) }
+
+        // Assigning here doesn't run the observer, so restoring costs no
+        // haptic and no resubscribe — `start()` picks it up instead.
+        if let saved = store.string(forKey: Self.coinKey), let restored = Coin(rawValue: saved) {
+            coin = restored
+        }
 
         priceFormatter = NumberFormatter()
         priceFormatter.numberStyle = .decimal
@@ -254,8 +266,9 @@ final class OrderbookViewModel {
         pendingBook = nil
         spreadText = "—"
         spreadPercentText = "—"
-        for index in asks.indices { clear(&asks[index]) }
-        for index in bids.indices { clear(&bids[index]) }
+        // The row slots keep their last contents on purpose: `hasBook` is
+        // already false, so the view knows to fold them away, and it needs
+        // something to fold. The next snapshot overwrites them.
     }
 
     /// Only the coin invalidates the header and bbo; re-grouping keeps them.
