@@ -214,20 +214,30 @@ final class OrderbookViewModel {
         sizeFormatter = NumberFormatter()
         sizeFormatter.numberStyle = .decimal
 
-        socket.onBook = { [weak self] book in
-            self?.pendingBook = book
-            self?.scheduleApply()
-        }
-        socket.onBbo = { [weak self] bbo in
-            self?.lastBbo = bbo
-            self?.scheduleSummary()
-        }
-        socket.onContext = { [weak self] ctx in
-            self?.apply(ctx)
-        }
-        socket.onState = { [weak self] state in
-            self?.connection = state
-        }
+        socket.onBook = { [weak self] in self?.receive($0) }
+        socket.onBbo = { [weak self] in self?.receive($0) }
+        socket.onContext = { [weak self] in self?.receive($0) }
+        socket.onState = { [weak self] in self?.connection = $0 }
+    }
+
+    // MARK: - Receiving frames
+
+    // Named entry points rather than closures assigned in `init`: taking
+    // frames is what this model does, so it may as well say so — and a test
+    // can hand it one without a socket.
+
+    func receive(_ book: L2Book) {
+        pendingBook = book
+        scheduleApply()
+    }
+
+    func receive(_ bbo: BboData) {
+        lastBbo = bbo
+        scheduleSummary()
+    }
+
+    func receive(_ context: AssetContext) {
+        apply(context)
     }
 
     func start() {
