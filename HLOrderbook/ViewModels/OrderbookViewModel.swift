@@ -58,10 +58,9 @@ final class OrderbookViewModel {
     /// Minimum interval between UI applies; bursts of frames are coalesced
     /// down to the latest snapshot.
     private static let applyInterval: Duration = .milliseconds(100)
-    /// The spread updates at most this often. The bbo stream reports every
-    /// top-of-book change, including tens-of-milliseconds transients while
-    /// makers re-quote; sampling more calmly, like Hyperliquid's own widget,
-    /// keeps the row from strobing through 1-2-4-9 during fast markets.
+    /// The spread updates at most this often. `bbo` reports every top-of-book
+    /// change, down to transients while makers re-quote, which the row would
+    /// otherwise strobe through during fast markets.
     private static let summaryInterval: Duration = .milliseconds(500)
     /// Decimals shown for coin-denominated sizes and totals.
     private static let coinSizeDecimals = 5
@@ -69,9 +68,7 @@ final class OrderbookViewModel {
     /// market without naming any of them.
     private static let headerSignificantDigits = 5
     /// A level also flashes when its resting size grows by at least this
-    /// fraction of itself — a doubling — so routine market-maker churn stays
-    /// quiet. Shrinking can't reach it (a level can only lose all of its
-    /// size, and then the level itself is gone).
+    /// fraction of itself — a doubling — so routine churn stays quiet.
     private static let flashThreshold = 1.0
 
     private(set) var asks: [Row]    // asks[0] is the best ask
@@ -85,8 +82,7 @@ final class OrderbookViewModel {
     private(set) var spreadText = "—"
     private(set) var spreadPercentText = "—"
     private(set) var hasBook = false
-    /// False until the first mark arrives for this market, so the header can
-    /// show that it's waiting rather than a placeholder dash.
+    /// False until the first mark arrives for this market.
     var hasPrice: Bool { previousMark != nil }
 
     /// Restored on launch, so the app opens on the market last looked at.
@@ -274,9 +270,8 @@ final class OrderbookViewModel {
         pendingBook = nil
         spreadText = "—"
         spreadPercentText = "—"
-        // The row slots keep their last contents on purpose: `hasBook` is
-        // already false, so the view knows to fold them away, and it needs
-        // something to fold. The next snapshot overwrites them.
+        // The row slots keep their contents on purpose: the view is about to
+        // fold them away, and it needs something to fold.
     }
 
     /// Only the coin invalidates the header and bbo; re-grouping keeps them.
@@ -524,12 +519,9 @@ final class OrderbookViewModel {
         return priceFormatter.string(from: value as NSNumber) ?? String(value)
     }
 
-    /// How many decimals the header shows, taken from the price's size rather
-    /// than a table of coins: always five significant figures. BTC near
-    /// $63,000 already has five digits before the point and shows none after;
-    /// ETH near $1,900 has four and shows one. The count only changes when a
-    /// price crosses a power of ten, so the header holds its width instead of
-    /// growing and shrinking with whatever the feed happens to send.
+    /// Decimals for the header, from the price's magnitude rather than a table
+    /// of coins: five significant figures. BTC near $63,000 shows none, ETH
+    /// near $1,900 shows one, and the count only moves at a power of ten.
     private func headerDecimals(for value: Double) -> Int {
         guard value > 0 else { return 0 }
         let integerDigits = Int(floor(log10(value))) + 1
