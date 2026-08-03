@@ -64,12 +64,6 @@ final class OrderbookViewModel {
     private static let summaryInterval: Duration = .milliseconds(500)
     /// Decimals shown for coin-denominated sizes and totals.
     private static let coinSizeDecimals = 5
-    /// Significant figures in the header price, which fixes its decimals per
-    /// market without naming any of them.
-    private static let headerSignificantDigits = 5
-    /// A level also flashes when its resting size grows by at least this
-    /// fraction of itself — a doubling — so routine churn stays quiet.
-    private static let flashThreshold = 1.0
 
     private(set) var asks: [Row]    // asks[0] is the best ask
     private(set) var bids: [Row]    // bids[0] is the best bid
@@ -82,6 +76,11 @@ final class OrderbookViewModel {
     private(set) var spreadText = "—"
     private(set) var spreadPercentText = "—"
     private(set) var hasBook = false
+    /// Surfaced only when it goes wrong: a first connection takes a moment and
+    /// the spinner already covers that, but a dropped one leaves stale numbers
+    /// on screen looking live.
+    private(set) var connection: HyperliquidSocket.State = .connecting
+    var isStale: Bool { connection == .reconnecting }
     /// False until the first mark arrives for this market.
     var hasPrice: Bool { previousMark != nil }
 
@@ -118,18 +117,14 @@ final class OrderbookViewModel {
     /// at 5 significant figures) widens the finest bucket to 2× or 5×.
     var groupingOptions: [GroupingOption] {
         guard let digits = priceDigits else { return [] }
-        let finestStep = pow(10.0, Double(digits - 5))
-        let fine = [
-            (Grouping.finest, finestStep),
-            (Grouping(nSigFigs: 5, mantissa: 2), finestStep * 2),
-            (Grouping(nSigFigs: 5, mantissa: 5), finestStep * 5),
-        ]
-        let coarse = [4, 3, 2].map { n in
-            (Grouping(nSigFigs: n, mantissa: nil), pow(10.0, Double(digits - n)))
+        // Finest first: the menu opens upward from the toolbar and renders its
+        // entries in reverse, so this puts the coarsest on top.
+        return PriceGrid.tickSteps(integerDigits: digits).map { tick in
+            GroupingOption(
+                grouping: Grouping(nSigFigs: tick.nSigFigs, mantissa: tick.mantissa),
+                label: formatTick(tick.step)
+            )
         }
-        // Listed finest-first: the menu opens upward from the toolbar and
-        // renders the entries in reverse, so this puts the coarsest on top.
-        return (fine + coarse).map { GroupingOption(grouping: $0.0, label: formatTick($0.1)) }
     }
 
     var groupingLabel: String {
@@ -141,17 +136,20 @@ final class OrderbookViewModel {
     /// the next snapshot — doesn't blank the toolbar's label.
     private var priceDigits: Int? {
         let raw = bidLevels.first?.px ?? askLevels.first?.px
-        guard let price = raw.flatMap(Double.init) ?? previousMark, price > 0 else { return nil }
-        return Int(floor(log10(price))) + 1
+        guard let price = raw.flatMap(Double.init) ?? previousMark else { return nil }
+        return PriceGrid.integerDigits(of: price)
     }
 
     /// Decimals the selected tick needs, so a $0.1 book shows "1,869.0"
     /// while a $1 book shows "63,083".
     private var tickDecimals: Int {
         guard let digits = priceDigits else { return 0 }
-        var step = pow(10.0, Double(digits - (grouping.nSigFigs ?? 5)))
-        step *= Double(grouping.mantissa ?? 1)
-        return max(0, Int(ceil(-log10(step))))
+        let step = PriceGrid.tickStep(
+            integerDigits: digits,
+            nSigFigs: grouping.nSigFigs,
+            mantissa: grouping.mantissa
+        )
+        return PriceGrid.decimals(forTick: step)
     }
 
     /// Price grouping requested from the feed.
@@ -186,15 +184,9 @@ final class OrderbookViewModel {
     private var lastBbo: BboData?
     private var previousMark: Double?
 
-    /// Prices visible in the previous render, per side, so a level that is
-    /// genuinely new can be told from one that merely scrolled into view.
-    private var previousAskPrices: Set<String> = []
-    private var previousBidPrices: Set<String> = []
-    private var previousAskEdge: Double?
-    private var previousBidEdge: Double?
-    /// Resting size per price at the previous render, in coin units so the
-    /// comparison is unaffected by the USDC display toggle.
-    private var previousSizes: [String: Double] = [:]
+    /// The previous render, in coin units so the comparison is unaffected by
+    /// the USDC display toggle.
+    private var changes = BookChanges()
 
     private var pendingBook: L2Book?
     private var applyScheduled = false
@@ -233,6 +225,9 @@ final class OrderbookViewModel {
         socket.onContext = { [weak self] ctx in
             self?.apply(ctx)
         }
+        socket.onState = { [weak self] state in
+            self?.connection = state
+        }
     }
 
     func start() {
@@ -262,11 +257,7 @@ final class OrderbookViewModel {
         hasBook = false
         askLevels = []
         bidLevels = []
-        previousAskPrices = []
-        previousBidPrices = []
-        previousAskEdge = nil
-        previousBidEdge = nil
-        previousSizes = [:]
+        changes.reset()
         pendingBook = nil
         spreadText = "—"
         spreadPercentText = "—"
@@ -329,19 +320,9 @@ final class OrderbookViewModel {
         let bidsParsed = parse(bidLevels)
         let maxTotal = max(asksParsed.last?.total ?? 0, bidsParsed.last?.total ?? 0, .leastNonzeroMagnitude)
         let decimals = tickDecimals
-        populate(rows: &asks, from: asksParsed, maxTotal: maxTotal, decimals: decimals,
-                 seen: previousAskPrices, edge: previousAskEdge, isAsk: true)
-        populate(rows: &bids, from: bidsParsed, maxTotal: maxTotal, decimals: decimals,
-                 seen: previousBidPrices, edge: previousBidEdge, isAsk: false)
-
-        previousAskPrices = Set(asksParsed.map(\.px))
-        previousBidPrices = Set(bidsParsed.map(\.px))
-        previousAskEdge = asksParsed.last.map(\.price)
-        previousBidEdge = bidsParsed.last.map(\.price)
-
-        var sizes: [String: Double] = [:]
-        for level in askLevels + bidLevels { sizes[level.px] = Double(level.sz) ?? 0 }
-        previousSizes = sizes
+        populate(rows: &asks, from: asksParsed, maxTotal: maxTotal, decimals: decimals, isAsk: true)
+        populate(rows: &bids, from: bidsParsed, maxTotal: maxTotal, decimals: decimals, isAsk: false)
+        changes.record(asks: asksParsed.map(\.asChange), bids: bidsParsed.map(\.asChange))
 
         hasBook = true
     }
@@ -352,6 +333,10 @@ final class OrderbookViewModel {
         let coinSize: Double
         let size: Double    // in the selected display unit
         var total: Double
+
+        var asChange: BookChanges.Level {
+            .init(key: px, price: price, coinSize: coinSize)
+        }
     }
 
     private func parse(_ levels: [L2Level]) -> [ParsedLevel] {
@@ -372,25 +357,15 @@ final class OrderbookViewModel {
     /// A level that merely scrolled in past the far edge of the visible
     /// window doesn't count — that happens on every shift and would light up
     /// the whole side at once.
-    private func shouldFlash(_ level: ParsedLevel, seen: Set<String>, edge: Double?, isAsk: Bool) -> Bool {
-        guard !seen.isEmpty else { return false }
-        guard let previous = previousSizes[level.px] else {
-            guard let edge else { return false }
-            return isAsk ? level.price <= edge : level.price >= edge
-        }
-        guard previous > 0 else { return false }
-        return abs(level.coinSize - previous) / previous >= Self.flashThreshold
-    }
-
-    private func populate(rows: inout [Row], from levels: [ParsedLevel], maxTotal: Double, decimals: Int,
-                          seen: Set<String>, edge: Double?, isAsk: Bool) {
+    private func populate(rows: inout [Row], from levels: [ParsedLevel],
+                          maxTotal: Double, decimals: Int, isAsk: Bool) {
         for index in rows.indices {
             guard index < levels.count else {
                 clear(&rows[index])
                 continue
             }
             let level = levels[index]
-            if shouldFlash(level, seen: seen, edge: edge, isAsk: isAsk) {
+            if changes.isNotable(level.asChange, isAsk: isAsk) {
                 rows[index].flashTick += 1
             }
             rows[index].rawPrice = level.px
@@ -401,6 +376,8 @@ final class OrderbookViewModel {
             rows[index].isEmpty = false
         }
     }
+
+    // MARK: - Spread
 
     private func scheduleSummary() {
         guard !summaryScheduled else { return }
@@ -456,6 +433,8 @@ final class OrderbookViewModel {
     /// The deepest level actually available for a pinned depth: the inspector
     /// pins "the Nth level out from the spread", clamped when the book is
     /// momentarily shallower than that.
+    // MARK: - Level inspector
+
     func clampedDepth(_ depth: Int, isAsk: Bool) -> Int? {
         let count = (isAsk ? askLevels : bidLevels).count
         guard count > 0 else { return nil }
@@ -486,6 +465,8 @@ final class OrderbookViewModel {
         )
     }
 
+    // MARK: - Header price
+
     private func apply(_ context: AssetContext) {
         guard let mark = Double(context.ctx.markPx) else { return }
 
@@ -493,7 +474,7 @@ final class OrderbookViewModel {
             priceDirection = mark > previousMark ? .up : .down
         }
         previousMark = mark
-        priceText = format(mark, decimals: headerDecimals(for: mark))
+        priceText = format(mark, decimals: PriceGrid.headerDecimals(for: mark))
     }
 
     // MARK: - Formatting
@@ -519,23 +500,13 @@ final class OrderbookViewModel {
         return priceFormatter.string(from: value as NSNumber) ?? String(value)
     }
 
-    /// Decimals for the header, from the price's magnitude rather than a table
-    /// of coins: five significant figures. BTC near $63,000 shows none, ETH
-    /// near $1,900 shows one, and the count only moves at a power of ten.
-    private func headerDecimals(for value: Double) -> Int {
-        guard value > 0 else { return 0 }
-        let integerDigits = Int(floor(log10(value))) + 1
-        return min(8, max(0, Self.headerSignificantDigits - integerDigits))
-    }
-
     private func decimals(in raw: String) -> Int {
         guard let dot = raw.firstIndex(of: ".") else { return 0 }
         return raw.distance(from: raw.index(after: dot), to: raw.endIndex)
     }
 
     private func formatTick(_ step: Double) -> String {
-        let decimals = step < 1 ? Int(-floor(log10(step))) : 0
-        return format(step, decimals: decimals)
+        format(step, decimals: PriceGrid.decimals(forTick: step))
     }
 
     private func formatSize(_ value: Double) -> String {

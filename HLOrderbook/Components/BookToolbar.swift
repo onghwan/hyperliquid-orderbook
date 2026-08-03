@@ -29,9 +29,14 @@ struct BookToolbar: View {
             }
         }
         // Overlaid rather than placed between the controls, so it's centred
-        // on the bar itself and not on whatever space they leave.
+        // on the bar itself and not on whatever space they leave. The bar's
+        // height doesn't change with what sits here, so the book never moves.
         .overlay {
-            if isWide {
+            if model.isStale {
+                // Takes the spread's place when there is one: a spread from a
+                // dead connection is as stale as the rest of the book.
+                reconnecting
+            } else if isWide {
                 spread
             }
         }
@@ -55,6 +60,17 @@ struct BookToolbar: View {
             SettingsScreen()
                 .presentationDetents([.large])
         }
+    }
+
+    private var reconnecting: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "wifi.exclamationmark")
+            Text("Reconnecting")
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .allowsHitTesting(false)
     }
 
     private var spread: some View {

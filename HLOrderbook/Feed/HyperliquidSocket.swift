@@ -13,9 +13,20 @@ final class HyperliquidSocket {
         var mantissa: Int?
     }
 
+    /// How the connection is doing, as far as the UI needs to care.
+    enum State {
+        /// Opening for the first time, with nothing having gone wrong yet.
+        case connecting
+        /// Frames are arriving.
+        case live
+        /// Dropped, or never got through. Whatever is on screen is stale.
+        case reconnecting
+    }
+
     var onBook: (L2Book) -> Void = { _ in }
     var onBbo: (BboData) -> Void = { _ in }
     var onContext: (AssetContext) -> Void = { _ in }
+    var onState: (State) -> Void = { _ in }
 
     private let url = URL(string: "wss://api.hyperliquid.xyz/ws")!
     private let session = URLSession(configuration: .default)
@@ -27,6 +38,12 @@ final class HyperliquidSocket {
     private var reconnectAttempt = 0
     private var subscription: Subscription?
     private var isActive = false
+    private var state: State = .connecting {
+        didSet {
+            guard state != oldValue else { return }
+            onState(state)
+        }
+    }
 
     func start(with subscription: Subscription) {
         guard !isActive else { return }
@@ -70,6 +87,9 @@ final class HyperliquidSocket {
         guard !isActive, subscription != nil else { return }
         isActive = true
         reconnectAttempt = 0
+        // A deliberate teardown, so this reads as a fresh start rather than a
+        // failure the user needs to know about.
+        state = .connecting
         open()
     }
 
@@ -102,6 +122,7 @@ final class HyperliquidSocket {
         guard isActive else { return }
         closeSocket()
         reconnectAttempt += 1
+        state = .reconnecting
         let delay = min(0.5 * pow(2.0, Double(reconnectAttempt - 1)), 8.0)
         reconnectTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(delay))
@@ -135,6 +156,7 @@ final class HyperliquidSocket {
 
         // Any successful frame proves the connection is healthy again.
         reconnectAttempt = 0
+        state = .live
 
         // Each case drops frames for a coin we've already switched away from.
         switch peek.channel {

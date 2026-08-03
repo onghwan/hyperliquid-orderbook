@@ -44,6 +44,10 @@ struct MarketHeaderBar: View {
                             .tint(.secondary)
                     }
                 }
+                // The last price that arrived, not the market now. The toolbar
+                // says why; dimming says which numbers not to trust.
+                .opacity(model.isStale ? 0.5 : 1)
+                .animation(.easeOut(duration: 0.2), value: model.isStale)
         }
     }
 
