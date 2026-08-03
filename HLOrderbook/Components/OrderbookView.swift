@@ -217,6 +217,17 @@ struct OrderbookView: View {
         )
         // Skips re-rendering rows whose content didn't change in a snapshot.
         .equatable()
+        // Three bare numbers read as nothing on their own, so the row speaks
+        // as one element that names them. Empty slots aren't levels at all.
+        .accessibilityElement(children: .ignore)
+        .accessibilityHidden(row.isEmpty)
+        .accessibilityLabel(rowLabel(row, side: side))
+        // The inspector is a press and hold, which VoiceOver can't perform.
+        // This is the same thing as a rotor action.
+        .accessibilityAction(named: "Cost to fill") {
+            Haptics.selection()
+            selected = level
+        }
         .background {
             // Row positions are stable while scrolling, so this publishes
             // once per layout rather than per frame.
@@ -238,6 +249,15 @@ struct OrderbookView: View {
         // and the rows stay where the inspector expects them.
         .offset(y: unfolded ? 0 : collapsedOffset(slot: row.slot, isAsk: side == .ask))
         .animation(travelAnimation(slot: row.slot), value: unfolded)
+    }
+
+    /// Reads a row as a sentence rather than three unlabelled numbers. The
+    /// side comes first: which half of the book you're in is the thing the
+    /// colours convey and a screen reader otherwise loses.
+    private func rowLabel(_ row: OrderbookViewModel.Row, side: BookSide) -> String {
+        let sideName = side == .ask ? "Ask" : "Bid"
+        return "\(sideName) \(row.priceText) USDC, size \(row.sizeText) \(model.unitLabel), "
+            + "total \(row.totalText) \(model.unitLabel)"
     }
 
     private static let rowStagger = 0.006

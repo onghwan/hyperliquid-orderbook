@@ -29,5 +29,7 @@ struct SpreadRowView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(RoundedRectangle(cornerRadius: 8).fill(Theme.card))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Spread \(spreadText) USDC, \(percentText)")
     }
 }

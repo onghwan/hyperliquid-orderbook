@@ -30,5 +30,6 @@ struct LevelStatsView: View {
                 .monospacedDigit()
                 .foregroundStyle(.primary)
         }
+        .accessibilityElement(children: .combine)
     }
 }

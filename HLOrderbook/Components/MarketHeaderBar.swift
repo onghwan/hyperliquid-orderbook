@@ -30,6 +30,8 @@ struct MarketHeaderBar: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Market, \(model.coin.rawValue)")
+            .accessibilityHint("Choose a different market")
 
             Spacer()
 
@@ -48,6 +50,11 @@ struct MarketHeaderBar: View {
                 // says why; dimming says which numbers not to trust.
                 .opacity(model.isStale ? 0.5 : 1)
                 .animation(.easeOut(duration: 0.2), value: model.isStale)
+                // The arrow and the colour carry the direction on screen, and
+                // the dimming carries staleness. Neither survives being read
+                // aloud, so the label says both.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(priceLabel)
         }
     }
 
@@ -77,6 +84,17 @@ struct MarketHeaderBar: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
         }
+    }
+
+    private var priceLabel: String {
+        guard model.hasPrice else { return "Waiting for the price" }
+        let direction = switch model.priceDirection {
+        case .up: ", up"
+        case .down: ", down"
+        case .flat: ""
+        }
+        let staleness = model.isStale ? ", last known — reconnecting" : ""
+        return "\(model.coin.rawValue) \(model.priceText) USDC\(direction)\(staleness)"
     }
 
     private var priceColor: Color {

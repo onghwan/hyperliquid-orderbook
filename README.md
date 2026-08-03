@@ -53,6 +53,12 @@ Written in Swift and SwiftUI only, with no third-party libraries.
   does the inspector as it moves between rows. You can turn this off in
   Settings. Text and row heights follow the user's text size through
   `@ScaledMetric`, up to a limit where the three columns stop fitting.
+- **VoiceOver** — A row reads as one sentence ("Ask 63,001 USDC, size 1.5 BTC,
+  total 4.2 BTC") instead of three bare numbers, because the side that the
+  colour conveys is lost when it is read aloud. The header price reads its
+  direction and says when it is stale. The level inspector is a press and
+  hold, which VoiceOver cannot perform, so every row also carries it as a
+  custom action.
 - **Resilience** — The app pings every 45 seconds and reconnects with
   exponential backoff. It closes the socket when the app goes to the
   background and opens it again when the app returns.
