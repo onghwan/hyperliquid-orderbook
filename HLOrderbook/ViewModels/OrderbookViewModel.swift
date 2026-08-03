@@ -77,8 +77,10 @@ final class OrderbookViewModel {
     private(set) var asks: [Row]    // asks[0] is the best ask
     private(set) var bids: [Row]    // bids[0] is the best bid
     /// Mark price from `activeAssetCtx` — the exchange's own price, so it
-    /// stays exact no matter how coarsely the book is grouped.
-    private(set) var priceText = "—"
+    /// stays exact no matter how coarsely the book is grouped. Empty while it
+    /// waits: whatever sits here is the frame the header's digits roll away
+    /// from when the price arrives.
+    private(set) var priceText = ""
     private(set) var priceDirection: Direction = .flat
     private(set) var spreadText = "—"
     private(set) var spreadPercentText = "—"
@@ -280,7 +282,7 @@ final class OrderbookViewModel {
     /// Only the coin invalidates the header and bbo; re-grouping keeps them.
     private func resetContext() {
         previousMark = nil
-        priceText = "—"
+        priceText = ""
         priceDirection = .flat
         lastBbo = nil
     }

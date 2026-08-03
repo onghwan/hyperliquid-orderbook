@@ -48,10 +48,8 @@ struct BookToolbar: View {
                 .id(colorScheme)
             )
         .padding(.horizontal, isWide ? sideMargin : 0)
-        // Landscape's home indicator sits on a thin edge, so the bar runs
-        // flush to it with even padding above and below. Cancelling the inset
-        // by hand: `ignoresSafeArea` has no effect on a view that is itself a
-        // safe-area inset.
+        // Cancelled by hand: `ignoresSafeArea` has no effect on a view that is
+        // itself a safe-area inset.
         .padding(.bottom, isWide ? -bottomInset : 0)
         .sheet(isPresented: $showsSettings) {
             SettingsScreen()
@@ -77,9 +75,8 @@ struct BookToolbar: View {
         .allowsHitTesting(false)
     }
 
-    /// Price grouping — the same `nSigFigs` control, labelled by the tick it
-    /// produces. The tick alone is label enough for anyone reading a book,
-    /// and it keeps the word "spread" for the real one in the book itself.
+    /// Price grouping — the `nSigFigs` control, labelled by the tick size it
+    /// produces rather than by the parameter behind it.
     private var groupingMenu: some View {
         Menu {
             Picker("Price grouping", selection: $model.grouping) {
@@ -93,8 +90,7 @@ struct BookToolbar: View {
                     .font(.caption.weight(.semibold))
                     .monospacedDigit()
                     .foregroundStyle(.primary)
-                // Mirrors the market button's chevron, pointing the way this
-                // menu opens.
+                // Points the way the menu opens.
                 Image(systemName: "chevron.up")
                     .font(.system(size: chevronFontSize, weight: .bold))
                     .foregroundStyle(.secondary)
@@ -119,8 +115,7 @@ struct BookToolbar: View {
                     .font(.caption.weight(.semibold))
                     .monospacedDigit()
                     .foregroundStyle(.primary)
-                // Mirrors the market button's chevron, pointing the way this
-                // menu opens.
+                // Points the way the menu opens.
                 Image(systemName: "chevron.up")
                     .font(.system(size: chevronFontSize, weight: .bold))
                     .foregroundStyle(.secondary)

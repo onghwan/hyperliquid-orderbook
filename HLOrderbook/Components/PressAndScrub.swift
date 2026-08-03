@@ -16,17 +16,14 @@ struct PressAndScrub: UIViewRepresentable {
 
     func makeUIView(context: Context) -> UIView {
         // Plain and hit-testable: a recognizer only receives touches that
-        // hit-test to its own view. Scrolling is unaffected, since the scroll
-        // view's pan recognizer sits above this in the view hierarchy and
-        // sees the same touches.
+        // hit-test to its own view.
         let view = UIView()
         let recognizer = UILongPressGestureRecognizer(
             target: context.coordinator,
             action: #selector(Coordinator.handle(_:))
         )
         recognizer.minimumPressDuration = minimumDuration
-        // Generous, so the press survives the finger travelling once it has
-        // been recognised; movement before that still fails it into a scroll.
+        // Generous, so a recognised press survives the finger travelling.
         recognizer.allowableMovement = 24
         view.addGestureRecognizer(recognizer)
         return view

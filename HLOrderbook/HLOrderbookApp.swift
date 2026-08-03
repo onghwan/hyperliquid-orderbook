@@ -7,10 +7,9 @@ struct HLOrderbookApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
-                // Text scales with the user's setting, but stops below the
-                // accessibility sizes: past that the book's three columns no
-                // longer fit side by side. Capping here rather than inside
-                // the screen keeps its own @ScaledMetric values in range too.
+                // Capped below the accessibility sizes, where the book's three
+                // columns stop fitting side by side. Capping at the root also
+                // keeps the screen's own @ScaledMetric values in range.
                 .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 .environment(preferences)
                 .preferredColorScheme(preferences.appearance.colorScheme)

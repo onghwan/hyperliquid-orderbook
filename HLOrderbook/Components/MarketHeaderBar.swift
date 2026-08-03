@@ -80,7 +80,8 @@ struct MarketHeaderBar: View {
                 .alignmentGuide(.firstTextBaseline) {
                     $0[VerticalAlignment.center] + priceFontSize * 0.35
                 }
-            Text(model.priceText)
+            // A space, not an empty string: an empty Text has no height.
+            Text(model.priceText.isEmpty ? " " : model.priceText)
                 .font(.system(size: priceFontSize, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(priceColor)

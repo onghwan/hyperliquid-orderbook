@@ -54,8 +54,7 @@ struct OrderbookView: View {
     /// its row is briefly unavailable.
     @State private var anchorRect: CGRect?
 
-    // Rows track Dynamic Type, and their height grows with them so taller
-    // text is never clipped.
+    // Height scales with the text, so taller type is never clipped.
     @ScaledMetric(relativeTo: .footnote) private var rowFontSize: CGFloat = 13
     @ScaledMetric(relativeTo: .footnote) private var rowHeight: CGFloat = 24
 
@@ -93,9 +92,8 @@ struct OrderbookView: View {
                 .overlay(alignment: .topLeading) { inspectorAnchor(target) }
             }
             .scrollDisabled(selected != nil)
-            // Centre on the spread once the first book lands, and again
-            // whenever the market changes. Side by side there is no spread
-            // row: both columns already start at the touch of the book.
+            // Centre on the spread once a book lands. Side by side there is no
+            // spread row: both columns already start at the touch of the book.
             .onChange(of: model.hasBook) { _, loaded in
                 unfoldTask?.cancel()
                 guard loaded else {
@@ -134,9 +132,8 @@ struct OrderbookView: View {
                 levelRow(row, side: .ask, highlighted: highlighted)
             }
             // The figures fade on the rows' curve, unstaggered: they sit at
-            // the seam, so they belong with the innermost rows. The bar
-            // behind them hides between books, so it's never left showing
-            // placeholders — on the same timing, so the two leave together.
+            // the seam, so they belong with the innermost rows. The bar hides
+            // on the same timing, so the two leave together.
             SpreadRowView(
                 spreadText: model.spreadText,
                 percentText: model.spreadPercentText,
@@ -233,15 +230,12 @@ struct OrderbookView: View {
             }
         }
         // Each animation sits directly above the property it drives: an
-        // animation modifier only governs what's below it, so opacity has to
-        // come first or its fade is dropped and it switches outright.
+        // animation modifier only governs what's below it, so opacity first
+        // or its fade is dropped and it switches outright.
         .opacity(unfolded ? 1 : 0)
         .animation(fadeAnimation(slot: row.slot), value: unfolded)
-        // An offset, not a layout change, so the fan-out costs nothing but a
-        // transform — and the rows stay where the inspector expects them.
-        // Unfolds from the spread outwards and folds back the other way, the
-        // far rows leaving first, so the book gathers into the spread rather
-        // than stalling at its edges while the next one loads.
+        // An offset, not a layout change: the fan-out costs one transform,
+        // and the rows stay where the inspector expects them.
         .offset(y: unfolded ? 0 : collapsedOffset(slot: row.slot, isAsk: side == .ask))
         .animation(travelAnimation(slot: row.slot), value: unfolded)
     }

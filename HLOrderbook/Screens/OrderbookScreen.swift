@@ -22,36 +22,33 @@ struct OrderbookScreen: View {
 
             OrderbookView(model: model, isWide: isWide)
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    // No spacing: the titles' opaque band runs right up to the
-                    // glass, so the book has no gap to show through between
-                    // the two.
+                    // No spacing: the titles' opaque band meets the glass, so
+                    // the book has no gap to show through between the two.
                     VStack(spacing: 0) {
                         MarketHeaderBar(model: model) { showsMarketPicker = true }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
-                            // Mirrors the toolbar: glass to the screen edge and
-                            // up through the status bar in portrait, a rounded
-                            // island matching the toolbar's width in landscape.
+                            // Mirrors the toolbar: edge to edge in portrait,
+                            // a rounded island in landscape.
                             .background(
                                 Color.clear
                                     .glassBackground(cornerRadius: isWide ? cornerRadius : 0)
                                     .ignoresSafeArea(edges: isWide ? [] : .top)
                                     // The glass layer keeps the appearance it
-                                    // was built with, so switching themes needs
+                                    // was built with, so a theme change needs
                                     // it rebuilt rather than redrawn.
                                     .id(colorScheme)
                             )
                             .padding(.horizontal, isWide ? sideMargin : 0)
 
+                        // Opaque, so the book passes behind the glass and
+                        // stops here rather than muddying the titles.
                         columnTitles(isWide: isWide)
                             .padding(.horizontal, 20)
                             .opacity(model.hasBook ? 1 : 0)
                             .padding(.top, 10)
                             .padding(.bottom, 6)
                             .frame(maxWidth: .infinity)
-                            // Only the titles are opaque. The book scrolls
-                            // behind the glass header and stops here, so the
-                            // column names always stay legible.
                             .background(Theme.background)
                     }
                 }
