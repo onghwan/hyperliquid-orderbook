@@ -56,6 +56,11 @@ Written in Swift and SwiftUI only, with no third-party libraries.
 - **Resilience** — The app pings every 45 seconds and reconnects with
   exponential backoff. It closes the socket when the app goes to the
   background and opens it again when the app returns.
+- **Stale prices are marked** — A first connection takes a moment and the
+  spinner already covers that, so nothing extra is shown. But once a
+  connection drops, the numbers on screen are the last ones that arrived, not
+  the market now. The toolbar says "Reconnecting" and the header price dims
+  until frames come back.
 
 ## The feed
 
@@ -94,8 +99,11 @@ resubscribes to `l2Book` only.
 ```
 RootView              owns the view model and the feed's lifecycle, then
                       hands off to the screen.
-Preferences           appearance and haptics, saved across launches. The app
-                      owns it and passes it down the environment.
+Book/
+  PriceGrid           the arithmetic between Hyperliquid's significant-figure
+                      grouping and the tick sizes the UI shows.
+  BookChanges         what moved since the last render, and which of those
+                      moves is worth flashing a row for.
 Feed/
   Models              the types we decode the frames into.
   HyperliquidSocket   the websocket: subscribe and unsubscribe (l2Book,
@@ -126,7 +134,23 @@ Design/
   Theme               colors, from the asset catalog (light and dark).
   Haptics             prepared feedback with a global mute.
   GlassBackground     Liquid Glass on iOS 26, a material fallback below that.
+  Preferences         which of those the user picked, saved across launches.
+                      The app owns it and passes it down the environment.
 ```
+
+## Tests
+
+`HLOrderbookTests` covers the logic that does not need a socket, using Swift
+Testing. Run it with `⌘U`, or:
+
+```
+xcodebuild test -scheme HLOrderbook -destination 'platform=iOS Simulator,name=iPhone 17'
+```
+
+The three suites are `PriceGrid` (tick sizes and header precision at real BTC
+and ETH magnitudes), `BookChanges` (when a row flashes and, mostly, when it
+does not), and `OrderbookViewModel` (what it restores at launch, what it
+saves, and what the toolbar reads off it).
 
 ## Performance
 
