@@ -29,7 +29,12 @@ older systems.
   below, with the spread pinned between them. The list scrolls natively
   beneath the floating glass header and toolbar, anchored on the spread so
   deeper levels are a swipe away. Nothing renders until the first snapshot
-  lands — just a spinner.
+  lands — just a spinner standing in for the price it's waiting on.
+- **Unfolding** — when a book arrives the rows fan out from the spread,
+  nearest first, fading in as they travel; switching market folds the old
+  book back the other way, the outermost rows leaving first, so it gathers
+  into the spread instead of stalling at its edges. Pure `offset` and
+  `opacity` — no layout pass, and the row identities never change.
 - **Two-column landscape** — past 600 pt of width the book reflows into bids
   and asks side by side, prices meeting in the middle and depth bars growing
   outward: twice the visible levels where the screen allows it. The trigger
@@ -39,7 +44,8 @@ older systems.
 - **Symbol selection** — BTC / ETH via a searchable market-picker sheet; the
   pattern scales past two assets (another market is one enum case away).
   Switching re-subscribes on the live socket (no reconnect) and re-centers
-  the book. Coin logos are bundled from the CC0
+  the book; the choice is remembered, so the app reopens on the market last
+  looked at. Coin logos are bundled from the CC0
   [cryptocurrency-icons](https://github.com/spothq/cryptocurrency-icons) set.
 - **Price grouping (`nSigFigs` / `mantissa`)** — a native menu that offers
   real tick sizes (1 / 2 / 5 / 10 / 100 / 1,000 for BTC) rather than raw
@@ -88,6 +94,10 @@ older systems.
 ## Architecture
 
 ```
+RootView              composition root: owns the model and the feed's
+                      lifecycle, then hands off to the screen.
+Preferences           appearance and haptics, persisted across launches;
+                      owned by the app, read through the environment.
 Feed/
   Models              wire types for the frames we decode.
   HyperliquidSocket   websocket lifecycle: subscribe/unsubscribe (l2Book,
@@ -95,14 +105,13 @@ Feed/
                       with backoff. Emits decoded frames.
 ViewModels/
   OrderbookViewModel  turns snapshots into fixed-identity row slots, coalesces
-                      bursts to ≤10 UI applies/sec, pre-formats all strings.
-  Preferences         appearance and haptics, persisted across launches.
+                      bursts to ≤10 UI applies/sec, pre-formats all strings,
+                      and remembers the selected market.
 Screens/
-  RootView            owns the model and the feed's lifecycle.
   OrderbookScreen     lays the header, book, and toolbar into the screen and
                       picks the ladder or two-column layout by width.
   SettingsScreen      appearance, haptics, feed info — presented as a sheet.
-  MarketPickerSheet   searchable market list.
+  MarketPickerScreen  searchable market list — presented as a sheet.
 Components/
   MarketHeaderBar     market button and live mark price, on glass.
   OrderbookView       the book: ladder or columns, plus the press-and-scrub

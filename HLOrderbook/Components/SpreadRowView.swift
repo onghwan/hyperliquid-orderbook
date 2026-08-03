@@ -4,6 +4,9 @@ import SwiftUI
 struct SpreadRowView: View {
     let spreadText: String
     let percentText: String
+    /// Fades with the rows, so the figures arrive as the book unfolds around
+    /// them. Separate from the bar itself, which stays put as the seam.
+    var textOpacity: Double = 1
 
     var body: some View {
         HStack(spacing: 18) {
@@ -21,6 +24,7 @@ struct SpreadRowView: View {
         }
         .lineLimit(1)
         .minimumScaleFactor(0.75)
+        .opacity(textOpacity)
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 10)
         .padding(.vertical, 7)

@@ -2,7 +2,9 @@ import Observation
 import Foundation
 import SwiftUI
 
-/// What the Settings tab owns, persisted across launches.
+/// App-wide user settings, persisted across launches. Not a view model — it
+/// presents nothing and knows about no screen; the app owns it and hands it
+/// down the environment.
 @MainActor
 @Observable
 final class Preferences {
@@ -31,22 +33,20 @@ final class Preferences {
         // defaults to on rather than off.
         hapticsEnabled = store.object(forKey: Key.haptics) as? Bool ?? true
         Haptics.isEnabled = hapticsEnabled
-        
-        let savedAppearanceString = store.string(forKey: Key.appearance) ?? ""
-        appearance = AppearanceMode(rawValue: savedAppearanceString) ?? .dark
+        appearance = store.string(forKey: Key.appearance).flatMap(AppearanceMode.init) ?? .dark
     }
 }
 
 enum AppearanceMode: String, CaseIterable, Identifiable {
     case light = "Light"
     case dark = "Dark"
-    
+
     var id: Self { self }
-    
+
     var colorScheme: ColorScheme? {
         switch self {
-        case .light: return .light
-        case .dark: return .dark
+        case .light: .light
+        case .dark: .dark
         }
     }
 }

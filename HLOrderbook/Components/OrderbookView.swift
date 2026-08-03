@@ -124,11 +124,6 @@ struct OrderbookView: View {
             // longer exists in the new book.
             .onChange(of: model.grouping) { dismissInspector() }
         }
-        .overlay {
-            if !model.hasBook {
-                loadingOverlay
-            }
-        }
     }
 
     private static let bookSpace = "book"
@@ -138,13 +133,20 @@ struct OrderbookView: View {
             ForEach(model.asks.reversed()) { row in
                 levelRow(row, side: .ask, highlighted: highlighted)
             }
-            SpreadRowView(spreadText: model.spreadText, percentText: model.spreadPercentText)
-                .id("spread")
-                .padding(.vertical, 4)
-                // Hidden between books, so it's never left showing
-                // placeholders while the rows fold and unfold around it.
-                .opacity(model.hasBook ? 1 : 0)
-                .animation(.easeOut(duration: 0.15), value: model.hasBook)
+            // The figures fade on the rows' curve, unstaggered: they sit at
+            // the seam, so they belong with the innermost rows. The bar
+            // behind them hides between books, so it's never left showing
+            // placeholders — on the same timing, so the two leave together.
+            SpreadRowView(
+                spreadText: model.spreadText,
+                percentText: model.spreadPercentText,
+                textOpacity: unfolded ? 1 : 0
+            )
+            .id("spread")
+            .padding(.vertical, 4)
+            .animation(unfolded ? .easeOut(duration: 0.28) : .easeIn(duration: 0.2), value: unfolded)
+            .opacity(model.hasBook ? 1 : 0)
+            .animation(.easeOut(duration: 0.2), value: model.hasBook)
             ForEach(model.bids) { row in
                 levelRow(row, side: .bid, highlighted: highlighted)
             }
@@ -291,11 +293,5 @@ struct OrderbookView: View {
         guard let hit = level(at: point), hit != selected else { return }
         Haptics.selection()
         selected = hit
-    }
-
-    private var loadingOverlay: some View {
-        ProgressView()
-            .padding(24)
-            .background(RoundedRectangle(cornerRadius: 14).fill(Theme.card))
     }
 }

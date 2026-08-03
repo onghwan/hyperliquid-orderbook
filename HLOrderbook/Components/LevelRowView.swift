@@ -6,16 +6,17 @@ import SwiftUI
 /// the two halves around the middle, so prices sit shoulder to shoulder and
 /// each bar grows away from them.
 enum LevelRowLayout {
-    case ladder         // price leading, bar hugs the trailing edge
+    case ladder         // price leading, bar hugs the leading edge
     case leftColumn     // price trailing, bar hugs the trailing edge
     case rightColumn    // price leading, bar hugs the leading edge
 
     var priceIsTrailing: Bool { self == .leftColumn }
-    var barAnchor: UnitPoint { self == .rightColumn ? .leading : .trailing }
+    /// The bar starts where the price is, so depth reads from the price out.
+    var barAnchor: UnitPoint { self == .leftColumn ? .trailing : .leading }
 }
 
-/// A single price level. The depth bar grows away from the price, and the row
-/// flashes when something notable happens at that price.
+/// A single price level. The depth bar runs from the price outwards, and the
+/// row flashes when something notable happens at that price.
 struct LevelRowView: View, Equatable {
     let row: OrderbookViewModel.Row
     let side: BookSide

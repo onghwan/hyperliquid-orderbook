@@ -6,7 +6,9 @@ struct MarketHeaderBar: View {
     var onSelectMarket: () -> Void
 
     @ScaledMetric(relativeTo: .title) private var priceFontSize: CGFloat = 28
-    @ScaledMetric(relativeTo: .headline) private var symbolFontSize: CGFloat = 19
+    // Scales on the price's curve so the two stay in proportion, but sits a
+    // step below it — the price is what changes, and should lead.
+    @ScaledMetric(relativeTo: .title) private var symbolFontSize: CGFloat = 22
     @ScaledMetric(relativeTo: .footnote) private var captionFontSize: CGFloat = 13
     @ScaledMetric(relativeTo: .caption2) private var chevronFontSize: CGFloat = 10
     @ScaledMetric(relativeTo: .headline) private var logoSize: CGFloat = 26
@@ -32,29 +34,43 @@ struct MarketHeaderBar: View {
 
             Spacer()
 
-            // One flat baseline-aligned row: nesting the arrow and price in
-            // their own HStack would hand the outer row a centre-aligned
-            // baseline that shifts whenever the arrow appears.
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                if model.priceDirection != .flat {
-                    Image(systemName: model.priceDirection == .up ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
-                        .font(.system(size: captionFontSize))
+            if !model.hasPrice {
+                // Stands in for the price it's waiting on, so there's one
+                // place to look rather than a dash here and a panel over the
+                // book. Centred in the bar rather than hung off the price's
+                // baseline: with no digits beside it, there's nothing to
+                // centre it on but the row itself.
+                ProgressView()
+                    .controlSize(.regular)
+                    // Not the accent: the price is never the thing being
+                    // pointed at.
+                    .tint(.secondary)
+                    .frame(height: priceFontSize)
+            } else {
+                // One flat baseline-aligned row: nesting the arrow and price
+                // in their own HStack would hand the outer row a centre-
+                // aligned baseline that shifts whenever the arrow appears.
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    if model.priceDirection != .flat {
+                        Image(systemName: model.priceDirection == .up ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                            .font(.system(size: captionFontSize))
+                            .foregroundStyle(priceColor)
+                            // Centre the arrow on the digits instead of sitting
+                            // it on their baseline: the price's cap-height
+                            // centre is roughly 35% of its font size above it.
+                            .alignmentGuide(.firstTextBaseline) {
+                                $0[VerticalAlignment.center] + priceFontSize * 0.35
+                            }
+                    }
+                    Text(model.priceText)
+                        .font(.system(size: priceFontSize, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
                         .foregroundStyle(priceColor)
-                        // Centre the arrow on the digits instead of sitting it
-                        // on their baseline: the price's cap-height centre is
-                        // roughly 35% of its font size above it.
-                        .alignmentGuide(.firstTextBaseline) {
-                            $0[VerticalAlignment.center] + priceFontSize * 0.35
-                        }
+                        .contentTransition(.numericText())
+                        .animation(.snappy(duration: 0.25), value: model.priceText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                 }
-                Text(model.priceText)
-                    .font(.system(size: priceFontSize, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(priceColor)
-                    .contentTransition(.numericText())
-                    .animation(.snappy(duration: 0.25), value: model.priceText)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
             }
         }
     }

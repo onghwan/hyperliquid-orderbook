@@ -43,7 +43,7 @@ struct OrderbookScreen: View {
         }
         .background(Theme.background.ignoresSafeArea())
         .sheet(isPresented: $showsMarketPicker) {
-            MarketPickerSheet(model: model)
+            MarketPickerScreen(model: model)
                 .presentationDetents([.medium, .large])
         }
     }

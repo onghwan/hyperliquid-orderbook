@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Market selection as a searchable sheet, so the same UI scales from the
-/// assignment's two coins to a full asset list.
-struct MarketPickerSheet: View {
+/// Searchable market selection, so the same UI scales from the assignment's
+/// two coins to a full asset list. Presented as a sheet today; nothing here
+/// assumes that.
+struct MarketPickerScreen: View {
     var model: OrderbookViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
@@ -23,10 +24,10 @@ struct MarketPickerSheet: View {
                     HStack(spacing: 10) {
                         Image(coin.iconName)
                             .resizable()
-                            .frame(width: 28, height: 28)
+                            .frame(width: 30, height: 30)
                             .clipShape(Circle())
                         Text(coin.rawValue)
-                            .font(.headline)
+                            .font(.title3.weight(.semibold))
                             .foregroundStyle(.primary)
                         Spacer()
                         if coin == model.coin {

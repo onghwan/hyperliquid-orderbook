@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Holds the app's state and the feed's lifecycle, above the screen itself.
+/// The composition root: owns the book's state and the feed's lifecycle, then
+/// hands off to the screen. Draws nothing itself.
 struct RootView: View {
     @State private var model = OrderbookViewModel()
     @Environment(\.scenePhase) private var scenePhase

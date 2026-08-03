@@ -80,6 +80,9 @@ final class OrderbookViewModel {
     private(set) var spreadText = "—"
     private(set) var spreadPercentText = "—"
     private(set) var hasBook = false
+    /// False until the first mark arrives for this market, so the header can
+    /// show that it's waiting rather than a placeholder dash.
+    var hasPrice: Bool { previousMark != nil }
 
     /// Restored on launch, so the app opens on the market last looked at.
     var coin: Coin = .btc {
